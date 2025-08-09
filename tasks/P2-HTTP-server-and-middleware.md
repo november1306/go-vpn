@@ -1,13 +1,15 @@
 # P2 HTTP Server and Middleware
 
 ## Summary
-Implement net/http server with middleware: logging, request ID, recovery, auth, CORS(off), rate limit.
+Implement HTTP API server for user registration and authentication with basic middleware.
 
 ## Deliverables
-- `internal/server/http/server.go` with graceful shutdown
-- Middleware: `logging`, `requestid`, `recover`, `auth(apikey)`, `ratelimit` (token bucket in-memory)
-- Handlers for `POST /v1/register`, `GET /v1/auth/ping`
-- Configurable listen address and TLS cert/key
+- `cmd/server` HTTP server with:
+  - `POST /register` handler for user registration
+  - Basic logging middleware using slog
+  - API key authentication middleware
+  - TLS configuration (self-signed cert generation)
+- Integration with WireGuard peer management and file storage
 
 ## Acceptance Criteria
 - [ ] Unit tests for middleware chaining
@@ -18,5 +20,10 @@ P2-API-spec-and-authN, P2-2.5
 
 ## Estimate
 4 days
+
+
+
+
+
 
 

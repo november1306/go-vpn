@@ -1,19 +1,26 @@
-# GoWire VPN (MVP)
+# GoWire VPN
 
-A simple, self-hosted WireGuard-based VPN written in Go. It consists of a server (control + data plane) and a CLI client for registration and connectivity.
+A simple, self-hosted WireGuard-based VPN server and CLI client written in Go.
 
-Status: MVP in development. Expect breaking changes.
+**⚠️ Status: MVP in development - expect breaking changes**
 
-## Features (MVP)
-- Single server location
-- API-key authentication
-- Basic peer management (add/remove)
-- CLI: `register`, `connect`, `disconnect`, `status`
-- File-based persistence (JSON)
+## What is GoWire VPN?
+
+GoWire VPN consists of:
+- **Server**: HTTP API for peer management + WireGuard data plane
+- **CLI Client**: Register, connect, disconnect, and check status
+
+## Current Features
+
+- Single server deployment
+- API key authentication
+- Basic peer registration and management
+- CLI commands: `register`, `connect`, `disconnect`, `status`
+- JSON file storage
 - Structured logging
 
 ## Requirements
-- Go 1.22+
+- Go 1.24
 - Admin privileges to configure network (Linux: `sudo`; Windows: Administrator)
 - Open UDP port for WireGuard (default 51820)
 - TLS certificate for API (self-signed allowed in dev)
@@ -103,4 +110,6 @@ Optional config file: `server.yaml` (env overrides file).
 
 ## License
 TBD (see `tasks/Cross-7-license-and-readme.md`).
+
+
 

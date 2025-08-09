@@ -613,7 +613,7 @@ Works cited
 WireGuard: fast, modern, secure VPN tunnel, accessed August 9, 2025, https://www.wireguard.com/
 Next Generation Kernel Network Tunnel - WireGuard, accessed August 9, 2025, https://www.wireguard.com/papers/wireguard.pdf
 Introduction to API key authentication | Documentation - Esri Developer - ArcGIS Online, accessed August 9, 2025, https://developers.arcgis.com/documentation/security-and-authentication/api-key-authentication/
-Secure Randomness in Go 1.22 - The Go Programming Language, accessed August 9, 2025, https://go.dev/blog/chacha8rand
+Secure Randomness in Go - The Go Programming Language, accessed August 9, 2025, https://go.dev/blog/chacha8rand
 crypto/rand - Go Packages, accessed August 9, 2025, https://pkg.go.dev/crypto/rand
 How to use Bcrypt to hash in Go - Educative.io, accessed August 9, 2025, https://www.educative.io/answers/how-to-use-bcrypt-to-hash-in-go
 bcrypt in Go - SSOJet, accessed August 9, 2025, https://ssojet.com/hashing/bcrypt-in-go/
