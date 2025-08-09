@@ -45,7 +45,10 @@ func (wd *WireGuardDevice) Start() error {
 	if wd.device == nil {
 		return fmt.Errorf("device not initialized")
 	}
-	return wd.device.Up()
+	if err := wd.device.Up(); err != nil {
+		return fmt.Errorf("failed to start WireGuard device: %w", err)
+	}
+	return nil
 }
 
 // Stop brings down the WireGuard device
@@ -90,14 +93,13 @@ func BasicDeviceDemo() error {
 	log.Println("Starting WireGuard device demonstration...")
 
 	// Generate a key pair
-	privateKey, publicKey, err := GenerateKeyPair()
+	_, publicKey, err := GenerateKeyPair()
 	if err != nil {
 		return fmt.Errorf("key generation failed: %w", err)
 	}
 
-	log.Printf("Generated key pair:")
-	log.Printf("Private key: %x", privateKey)
-	log.Printf("Public key: %x", publicKey)
+	log.Printf("Generated key pair - Public key: %x", publicKey)
+	// Private key is not logged for security reasons
 
 	// Create device (this will fail without proper permissions, but shows the API)
 	log.Println("Creating WireGuard device...")

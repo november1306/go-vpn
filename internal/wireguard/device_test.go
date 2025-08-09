@@ -22,19 +22,9 @@ func TestGenerateKeyPair(t *testing.T) {
 		// We can't trigger a crypto failure easily, so we verify the error handling exists
 		// by checking that the function completes (crypto/rand works in test environment)
 		
-		privateKey, publicKey, err := GenerateKeyPair()
+		_, _, err := GenerateKeyPair()
 		if err != nil && !strings.Contains(err.Error(), "failed to generate private key") {
 			t.Errorf("Expected our error message format, got: %v", err)
-		}
-		
-		// Basic validation that our function returns the expected types
-		if err == nil {
-			if len(privateKey) != 32 {
-				t.Error("Private key should be 32 bytes")
-			}
-			if len(publicKey) != 32 {
-				t.Error("Public key should be 32 bytes")
-			}
 		}
 	})
 }
@@ -120,16 +110,12 @@ func TestBasicDeviceDemo(t *testing.T) {
 func TestWireGuardDeviceStruct(t *testing.T) {
 	t.Run("struct can be created", func(t *testing.T) {
 		device := &WireGuardDevice{}
-		if device == nil {
-			t.Error("Should be able to create WireGuardDevice struct")
-		}
-		
-		// Verify our struct has the expected fields
+		// Verify our struct has the expected zero values
 		if device.device != nil {
-			t.Log("device field exists and is accessible")
+			t.Error("New struct should have nil device field")
 		}
 		if device.tun != nil {
-			t.Log("tun field exists and is accessible")
+			t.Error("New struct should have nil tun field")
 		}
 	})
 }

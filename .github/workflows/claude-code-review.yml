@@ -53,6 +53,7 @@ jobs:
             - Performance considerations
             - Security concerns
             - Test coverage
+            - **File appropriateness**: Check if any files should be kept local-only (build artifacts, coverage files, temporary files, IDE configs, etc.) and should be added to .gitignore instead of being committed
             
             Be constructive and helpful in your feedback.
 
