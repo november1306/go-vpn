@@ -17,20 +17,20 @@ jobs:
     #   github.event.pull_request.user.login == 'external-contributor' ||
     #   github.event.pull_request.user.login == 'new-developer' ||
     #   github.event.pull_request.author_association == 'FIRST_TIME_CONTRIBUTOR'
-    
+
     runs-on: ubuntu-latest
     permissions:
       contents: read
       pull-requests: read
       issues: read
       id-token: write
-    
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
           fetch-depth: 1
-          
+
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
@@ -52,14 +52,23 @@ jobs:
             - Potential bugs or issues
             - Performance considerations
             - Security concerns
+            - keep room for future changes and extentions at design level, but respect
+              YAGNI
             - Test coverage
             - **File appropriateness**: Check if any files should be kept local-only (build artifacts, coverage files, temporary files, IDE configs, etc.) and should be added to .gitignore instead of being committed
-            
+
+            **Testing Principles**:
+            - ensure tests does not adjust to pass. tests should respect initial requirements, not to obscure issues
+            - Test application logic, not dependencies - focus on wrapper behavior, error handling, and business logic
+            - Avoid tests requiring system privileges or external resources
+            - Prioritize edge cases, validation, and error paths over happy path testing of third-party functionality
+            - Tests should validate that integration points handle failures gracefully
+
             Be constructive and helpful in your feedback.
 
           # Optional: Use sticky comments to make Claude reuse the same comment on subsequent pushes to the same PR
           # use_sticky_comment: true
-          
+
           # Optional: Customize review based on file types
           # direct_prompt: |
           #   Review this PR focusing on:
@@ -67,16 +76,16 @@ jobs:
           #   - For API endpoints: Security, input validation, and error handling
           #   - For React components: Performance, accessibility, and best practices
           #   - For tests: Coverage, edge cases, and test quality
-          
+
           # Optional: Different prompts for different authors
           # direct_prompt: |
-          #   ${{ github.event.pull_request.author_association == 'FIRST_TIME_CONTRIBUTOR' && 
+          #   ${{ github.event.pull_request.author_association == 'FIRST_TIME_CONTRIBUTOR' &&
           #   'Welcome! Please review this PR from a first-time contributor. Be encouraging and provide detailed explanations for any suggestions.' ||
           #   'Please provide a thorough code review focusing on our coding standards and best practices.' }}
-          
+
           # Allow Claude to run Go tests and linting
           allowed_tools: "Bash(go test ./...),Bash(go vet ./...),Bash(go mod tidy),Bash(go build ./...)"
-          
+
           # Optional: Skip review for certain conditions
           # if: |
           #   !contains(github.event.pull_request.title, '[skip-review]') &&

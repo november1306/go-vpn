@@ -53,13 +53,29 @@ func (wd *WireGuardDevice) Start() error {
 
 // Stop brings down the WireGuard device
 func (wd *WireGuardDevice) Stop() error {
+	var err error
+	
+	// Close device first, but don't let panic prevent TUN cleanup
 	if wd.device != nil {
-		wd.device.Close()
+		func() {
+			defer func() {
+				if r := recover(); r != nil {
+					// Log panic but continue with TUN cleanup
+					log.Printf("Panic during device close: %v", r)
+				}
+			}()
+			wd.device.Close()
+		}()
 	}
+	
+	// Always attempt TUN cleanup
 	if wd.tun != nil {
-		return wd.tun.Close()
+		if closeErr := wd.tun.Close(); closeErr != nil {
+			err = fmt.Errorf("failed to close TUN interface: %w", closeErr)
+		}
 	}
-	return nil
+	
+	return err
 }
 
 // GenerateKeyPair generates a new WireGuard key pair using crypto/rand
