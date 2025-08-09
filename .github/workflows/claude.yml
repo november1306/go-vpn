@@ -29,6 +29,11 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 1
+          
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.24'
 
       - name: Run Claude Code
         id: claude
@@ -49,8 +54,8 @@ jobs:
           # Optional: Trigger when specific user is assigned to an issue
           # assignee_trigger: "claude-bot"
           
-          # Optional: Allow Claude to run specific commands
-          # allowed_tools: "Bash(npm install),Bash(npm run build),Bash(npm run test:*),Bash(npm run lint:*)"
+          # Allow Claude to run Go commands
+          allowed_tools: "Bash(go test ./...),Bash(go vet ./...),Bash(go mod tidy),Bash(go build ./...),Bash(go run ./...)"
           
           # Optional: Add custom instructions for Claude to customize its behavior for your project
           # custom_instructions: |
