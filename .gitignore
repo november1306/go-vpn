@@ -1,4 +1,6 @@
 bin/
 coverage/
+coverage.out
+coverage.html
 .vscode/
 .DS_Store

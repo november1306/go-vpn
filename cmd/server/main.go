@@ -1,8 +1,9 @@
 package main
 
 import (
-"fmt"
-"github.com/november1306/go-vpn/internal/version"
+	"fmt"
+
+	"github.com/november1306/go-vpn/internal/version"
 )
 
 func main() {
