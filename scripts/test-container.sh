@@ -47,7 +47,7 @@ fi
 # Test 2: Container logs show expected output
 echo "✅ Test 2: Checking container logs..."
 LOGS=$(docker logs ${CONTAINER_NAME} 2>&1)
-if echo "$LOGS" | grep -q "go-vpn server"; then
+if echo "$LOGS" | grep -q "go-vpn server" && echo "$LOGS" | grep -q "Server starting"; then
     echo "   ✓ Server started successfully"
     echo "   📝 Logs: $LOGS"
 else
