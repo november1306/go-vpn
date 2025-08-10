@@ -20,6 +20,7 @@ type ServerConfig struct {
 	InterfaceName string
 	
 	// Server private key (base64 encoded)
+	// SECURITY: This should be handled securely - not logged or exposed
 	PrivateKey string
 	
 	// Listen port for WireGuard UDP traffic

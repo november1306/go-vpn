@@ -5,6 +5,13 @@ import (
 	"fmt"
 	"log/slog"
 	"sync"
+
+	"github.com/november1306/go-vpn/internal/wireguard/keys"
+)
+
+const (
+	// MaxTCPUDPPort is the maximum valid TCP/UDP port number
+	MaxTCPUDPPort = 65535
 )
 
 // VPNServer manages the WireGuard VPN server with pluggable backends
@@ -193,7 +200,12 @@ func (s *VPNServer) validateConfig(config ServerConfig) error {
 		return fmt.Errorf("private key is required")
 	}
 	
-	if config.ListenPort <= 0 || config.ListenPort > 65535 {
+	// Validate private key format for security
+	if err := keys.ValidatePrivateKey(config.PrivateKey); err != nil {
+		return fmt.Errorf("invalid private key: %w", err)
+	}
+	
+	if config.ListenPort <= 0 || config.ListenPort > MaxTCPUDPPort {
 		return fmt.Errorf("invalid listen port: %d", config.ListenPort)
 	}
 	
@@ -206,9 +218,5 @@ func (s *VPNServer) validateConfig(config ServerConfig) error {
 
 // derivePublicKey derives the public key from the private key
 func (s *VPNServer) derivePublicKey(privateKey string) (string, error) {
-	// This is a placeholder - we'd need to implement the actual key derivation
-	// using the same curve25519 logic as in wireguard/keys package
-	
-	// For now, return a placeholder that indicates this needs implementation
-	return "TODO_DERIVE_FROM_" + privateKey[:16] + "...", nil
+	return keys.PublicKeyFromPrivate(privateKey)
 }
