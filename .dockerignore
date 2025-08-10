@@ -1,0 +1,34 @@
+# Git files
+.git
+.gitignore
+
+# Documentation
+README.md
+*.md
+docs/
+
+# Build artifacts
+bin/
+*.exe
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Docker files
+Dockerfile
+docker-compose.yml
+.dockerignore
+
+# CI files
+.github/
+
+# Local development
+config/
+*.local.md
