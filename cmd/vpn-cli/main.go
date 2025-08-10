@@ -133,7 +133,6 @@ func runRegister(serverURL string) error {
 	fmt.Printf("🕒 Timestamp: %s\n", registerResp.Timestamp)
 	
 	fmt.Println("\n🎉 Registration complete! Keys exchanged successfully.")
-	fmt.Printf("💾 Client private key (keep secure): %s\n", clientPrivKey)
 	
 	return nil
 }

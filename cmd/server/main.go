@@ -25,29 +25,43 @@ type RegisterResponse struct {
 	Timestamp       string `json:"timestamp"`
 }
 
+type ErrorResponse struct {
+	Error     string `json:"error"`
+	Timestamp string `json:"timestamp"`
+}
+
+func writeErrorJSON(w http.ResponseWriter, status int, message string) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(status)
+	json.NewEncoder(w).Encode(ErrorResponse{
+		Error:     message,
+		Timestamp: time.Now().UTC().Format(time.RFC3339),
+	})
+}
+
 var serverPrivateKey string
 var serverPublicKey string
 
 func handleRegister(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		writeErrorJSON(w, http.StatusMethodNotAllowed, "Method not allowed")
 		return
 	}
 
 	var req RegisterRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "Invalid JSON", http.StatusBadRequest)
+		writeErrorJSON(w, http.StatusBadRequest, "Invalid JSON")
 		return
 	}
 
 	if req.ClientPublicKey == "" {
-		http.Error(w, "clientPublicKey is required", http.StatusBadRequest)
+		writeErrorJSON(w, http.StatusBadRequest, "clientPublicKey is required")
 		return
 	}
 
 	// Validate client public key format
 	if err := keys.ValidatePublicKey(req.ClientPublicKey); err != nil {
-		http.Error(w, "Invalid client public key format: "+err.Error(), http.StatusBadRequest)
+		writeErrorJSON(w, http.StatusBadRequest, "Invalid client public key format: "+err.Error())
 		return
 	}
 
