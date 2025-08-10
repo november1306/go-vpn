@@ -4,3 +4,20 @@ coverage.out
 coverage.html
 .vscode/
 .DS_Store
+
+# Go build artifacts
+*.exe
+*.test
+*.prof
+vendor/
+
+# Environment files
+.env
+*.env
+!*.env.example
+
+# Docker overrides
+docker-compose.override.yml
+
+# Logs
+*.log

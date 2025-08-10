@@ -1,0 +1,56 @@
+version: '3.8'
+
+services:
+  vpn-server:
+    build: .
+    container_name: go-vpn-server
+    restart: unless-stopped
+    ports:
+      - "8443:8443"     # API port
+      - "51820:51820/udp" # WireGuard port
+    cap_add:
+      - NET_ADMIN       # Required for network interface management
+      - SYS_MODULE      # Required for loading kernel modules
+    sysctls:
+      - net.ipv4.ip_forward=1
+      - net.ipv6.conf.all.forwarding=1
+    volumes:
+      - ./config:/etc/vpn:ro
+      - vpn-data:/var/lib/vpn
+      - /lib/modules:/lib/modules:ro
+    environment:
+      - VPN_LISTEN_PORT=51820
+      - VPN_API_PORT=8443
+      - VPN_SUBNET=10.0.0.0/24
+      - VPN_DATA_DIR=/var/lib/vpn
+      - VPN_LOG_LEVEL=info
+    networks:
+      - vpn-network
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:8443/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+  # Optional: Add a monitoring/logging service
+  # prometheus:
+  #   image: prom/prometheus:latest
+  #   container_name: go-vpn-prometheus
+  #   ports:
+  #     - "9090:9090"
+  #   volumes:
+  #     - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+  #   networks:
+  #     - vpn-network
+
+volumes:
+  vpn-data:
+    driver: local
+
+networks:
+  vpn-network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16
