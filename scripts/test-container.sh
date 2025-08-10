@@ -92,14 +92,14 @@ fi
 
 # Test 6: Required directories exist
 echo "✅ Test 6: Checking required directories..."
-if docker exec ${CONTAINER_NAME} test -d /etc/vpn; then
+if docker exec ${CONTAINER_NAME} sh -c "test -d /etc/vpn"; then
     echo "   ✓ /etc/vpn directory exists"
 else
     echo "   ❌ /etc/vpn directory missing"
     exit 1
 fi
 
-if docker exec ${CONTAINER_NAME} test -d /var/lib/vpn; then
+if docker exec ${CONTAINER_NAME} sh -c "test -d /var/lib/vpn"; then
     echo "   ✓ /var/lib/vpn directory exists"
 else
     echo "   ❌ /var/lib/vpn directory missing"
@@ -108,31 +108,45 @@ fi
 
 # Test 7: Binary exists and is executable
 echo "✅ Test 7: Checking binary..."
-if docker exec ${CONTAINER_NAME} test -x ./server; then
+if docker exec ${CONTAINER_NAME} sh -c "test -x ./server"; then
     echo "   ✓ Server binary is executable"
 else
     echo "   ❌ Server binary not found or not executable"
     exit 1
 fi
 
-# Future tests (uncomment when features are implemented):
-#
-# # Test 8: Health endpoint
-# echo "✅ Test 8: Testing health endpoint..."
-# if curl -f http://localhost:${API_PORT}/health; then
-#     echo "   ✓ Health endpoint responding"
-# else
-#     echo "   ❌ Health endpoint not responding"
-#     exit 1
-# fi
-#
-# # Test 9: API endpoint basic auth
-# echo "✅ Test 9: Testing API authentication..."
-# if curl -f -H "Authorization: Bearer test" http://localhost:${API_PORT}/api/status; then
-#     echo "   ✓ API endpoint responding with auth"
-# else
-#     echo "   ⚠️  API endpoint not yet implemented"
-# fi
+# Test 8: API connectivity and service responsiveness
+echo "✅ Test 8: Testing API port functionality..."
+# Use a valid WireGuard public key for connectivity test
+TEST_CLIENT_KEY="42340sg7Ogx7ZCAWZHCuvFDvhEsT3A7f7HTn99J9VR4="
+RESPONSE=$(curl -s -X POST http://localhost:${API_PORT}/api/register \
+    -H "Content-Type: application/json" \
+    -d "{\"clientPublicKey\":\"${TEST_CLIENT_KEY}\"}")
+
+if echo "$RESPONSE" | grep -q "serverPublicKey"; then
+    echo "   ✓ API port functional - server responding to requests"
+    echo "   📝 Service connectivity confirmed"
+else
+    echo "   ❌ API port not functional - server not responding"
+    echo "   📝 Response: $RESPONSE"
+    exit 1
+fi
+
+# Test 9: Error handling and service robustness
+echo "✅ Test 9: Testing service error handling..."
+INVALID_RESPONSE=$(curl -s -w "%{http_code}" -X POST http://localhost:${API_PORT}/api/register \
+    -H "Content-Type: application/json" \
+    -d "{\"clientPublicKey\":\"invalid-key\"}")
+
+if echo "$INVALID_RESPONSE" | grep -q "400"; then
+    echo "   ✓ Service properly handles malformed requests"
+else
+    echo "   ⚠️  Service error handling needs attention"
+fi
+
+# Future infrastructure tests:
+# # Test 10: Health endpoint connectivity (when implemented)
+# # Test 11: Load balancer readiness (when implemented)
 
 echo ""
 echo "🎉 All container integration tests passed!"
