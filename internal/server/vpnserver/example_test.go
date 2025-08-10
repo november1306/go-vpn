@@ -3,7 +3,6 @@ package vpnserver
 import (
 	"context"
 	"fmt"
-	"time"
 
 	"github.com/november1306/go-vpn/internal/wireguard/keys"
 )
