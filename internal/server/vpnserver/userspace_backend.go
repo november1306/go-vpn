@@ -1,0 +1,205 @@
+package vpnserver
+
+import (
+	"context"
+	"fmt"
+	"log/slog"
+	"sync"
+
+	"github.com/november1306/go-vpn/internal/wireguard"
+)
+
+// UserspaceBackend implements WireGuardBackend using wireguard-go userspace implementation
+// This provides cross-platform support and easy deployment, suitable for MVP and up to ~500 users
+type UserspaceBackend struct {
+	mu       sync.RWMutex
+	device   *wireguard.WireGuardDevice
+	config   ServerConfig
+	running  bool
+	peers    map[string][]string // publicKey -> allowedIPs mapping for tracking
+}
+
+// NewUserspaceBackend creates a new userspace WireGuard backend
+func NewUserspaceBackend() *UserspaceBackend {
+	return &UserspaceBackend{
+		peers: make(map[string][]string),
+	}
+}
+
+// Start initializes and starts the userspace WireGuard device
+func (ub *UserspaceBackend) Start(ctx context.Context, config ServerConfig) error {
+	ub.mu.Lock()
+	defer ub.mu.Unlock()
+	
+	if ub.running {
+		return fmt.Errorf("backend already running")
+	}
+	
+	slog.Info("Starting userspace WireGuard backend", "interface", config.InterfaceName, "port", config.ListenPort)
+	
+	// Create WireGuard device using existing foundation
+	device, err := wireguard.NewWireGuardDevice(config.InterfaceName)
+	if err != nil {
+		return fmt.Errorf("failed to create WireGuard device: %w", err)
+	}
+	
+	// Configure the device with server settings
+	if err := ub.configureDevice(device, config); err != nil {
+		device.Stop() // Clean up on error
+		return fmt.Errorf("failed to configure device: %w", err)
+	}
+	
+	// Start the device
+	if err := device.Start(); err != nil {
+		device.Stop() // Clean up on error
+		return fmt.Errorf("failed to start device: %w", err)
+	}
+	
+	ub.device = device
+	ub.config = config
+	ub.running = true
+	
+	slog.Info("Userspace WireGuard backend started successfully", "interface", config.InterfaceName)
+	return nil
+}
+
+// Stop gracefully shuts down the userspace WireGuard device
+func (ub *UserspaceBackend) Stop(ctx context.Context) error {
+	ub.mu.Lock()
+	defer ub.mu.Unlock()
+	
+	if !ub.running {
+		return nil // Already stopped
+	}
+	
+	slog.Info("Stopping userspace WireGuard backend", "interface", ub.config.InterfaceName)
+	
+	if ub.device != nil {
+		if err := ub.device.Stop(); err != nil {
+			slog.Error("Error stopping WireGuard device", "error", err)
+			// Continue with cleanup even if stop fails
+		}
+		ub.device = nil
+	}
+	
+	ub.running = false
+	ub.peers = make(map[string][]string) // Clear peer tracking
+	
+	slog.Info("Userspace WireGuard backend stopped")
+	return nil
+}
+
+// AddPeer adds a new peer to the WireGuard device
+func (ub *UserspaceBackend) AddPeer(publicKey string, allowedIPs []string) error {
+	ub.mu.Lock()
+	defer ub.mu.Unlock()
+	
+	if !ub.running {
+		return fmt.Errorf("backend not running")
+	}
+	
+	slog.Info("Adding peer to userspace backend", "publicKey", publicKey[:16]+"...", "allowedIPs", allowedIPs)
+	
+	// Build IPC configuration string to add peer
+	// Format: set=1\npublic_key=<key>\nallowed_ip=<ip1>\nallowed_ip=<ip2>\n
+	config := "set=1\n"
+	config += fmt.Sprintf("public_key=%s\n", publicKey)
+	
+	for _, ip := range allowedIPs {
+		config += fmt.Sprintf("allowed_ip=%s\n", ip)
+	}
+	config += "\n"
+	
+	// Apply configuration via IPC (this is how wireguard-go accepts peer config)
+	if err := ub.applyIPCConfig(config); err != nil {
+		return fmt.Errorf("failed to add peer via IPC: %w", err)
+	}
+	
+	// Track peer for management
+	ub.peers[publicKey] = allowedIPs
+	
+	slog.Info("Peer added successfully", "publicKey", publicKey[:16]+"...", "peerCount", len(ub.peers))
+	return nil
+}
+
+// RemovePeer removes a peer from the WireGuard device
+func (ub *UserspaceBackend) RemovePeer(publicKey string) error {
+	ub.mu.Lock()
+	defer ub.mu.Unlock()
+	
+	if !ub.running {
+		return fmt.Errorf("backend not running")
+	}
+	
+	slog.Info("Removing peer from userspace backend", "publicKey", publicKey[:16]+"...")
+	
+	// Build IPC configuration string to remove peer
+	config := "set=1\n"
+	config += fmt.Sprintf("public_key=%s\n", publicKey)
+	config += "remove=true\n\n"
+	
+	// Apply configuration via IPC
+	if err := ub.applyIPCConfig(config); err != nil {
+		return fmt.Errorf("failed to remove peer via IPC: %w", err)
+	}
+	
+	// Remove from tracking
+	delete(ub.peers, publicKey)
+	
+	slog.Info("Peer removed successfully", "publicKey", publicKey[:16]+"...", "peerCount", len(ub.peers))
+	return nil
+}
+
+// GetPeers returns information about all connected peers
+func (ub *UserspaceBackend) GetPeers() ([]PeerInfo, error) {
+	ub.mu.RLock()
+	defer ub.mu.RUnlock()
+	
+	if !ub.running {
+		return nil, fmt.Errorf("backend not running")
+	}
+	
+	// For userspace implementation, we'll return basic info from our tracking
+	// More detailed stats would require parsing IPC get responses
+	peers := make([]PeerInfo, 0, len(ub.peers))
+	
+	for publicKey, allowedIPs := range ub.peers {
+		peers = append(peers, PeerInfo{
+			PublicKey:  publicKey,
+			AllowedIPs: allowedIPs,
+			Endpoint:   "", // Would need IPC query for endpoint
+			LastSeen:   0,  // Would need IPC query for handshake time
+			RxBytes:    0,  // Would need IPC query for transfer stats  
+			TxBytes:    0,  // Would need IPC query for transfer stats
+		})
+	}
+	
+	return peers, nil
+}
+
+// IsRunning returns whether the backend is currently running
+func (ub *UserspaceBackend) IsRunning() bool {
+	ub.mu.RLock()
+	defer ub.mu.RUnlock()
+	
+	return ub.running
+}
+
+// configureDevice configures the WireGuard device with server settings
+func (ub *UserspaceBackend) configureDevice(wgDevice *wireguard.WireGuardDevice, config ServerConfig) error {
+	// Build IPC configuration for server setup
+	// Format: private_key=<key>\nlisten_port=<port>\n
+	ipcConfig := fmt.Sprintf("private_key=%s\nlisten_port=%d\n", config.PrivateKey, config.ListenPort)
+	
+	return ub.applyIPCConfig(ipcConfig)
+}
+
+// applyIPCConfig applies configuration to the device via IPC
+func (ub *UserspaceBackend) applyIPCConfig(config string) error {
+	if ub.device == nil {
+		return fmt.Errorf("device not initialized")
+	}
+	
+	// Use the exposed IPC method from our WireGuardDevice wrapper
+	return ub.device.IpcSet(config)
+}

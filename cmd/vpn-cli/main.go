@@ -45,7 +45,7 @@ var connectCmd = &cobra.Command{
 }
 
 var disconnectCmd = &cobra.Command{
-	Use:   "disconnect", 
+	Use:   "disconnect",
 	Short: "Disconnect from VPN",
 	Long:  `Disconnect from the currently active VPN connection.`,
 	Run: func(cmd *cobra.Command, args []string) {
@@ -65,13 +65,13 @@ var statusCmd = &cobra.Command{
 func init() {
 	// Add version flag to root command
 	rootCmd.Version = version.Version
-	
+
 	// Add subcommands
 	rootCmd.AddCommand(registerCmd)
-	rootCmd.AddCommand(connectCmd) 
+	rootCmd.AddCommand(connectCmd)
 	rootCmd.AddCommand(disconnectCmd)
 	rootCmd.AddCommand(statusCmd)
-	
+
 	// Add flags for register command
 	registerCmd.Flags().StringP("server", "s", "", "VPN server URL (required)")
 	registerCmd.MarkFlagRequired("server")
@@ -89,26 +89,26 @@ type RegisterResponse struct {
 
 func runRegister(serverURL string) error {
 	fmt.Println("🔐 Client Registration Demo")
-	
+
 	// Generate client key pair
 	fmt.Println("Generating client key pair...")
 	_, clientPubKey, err := keys.GenerateKeyPair()
 	if err != nil {
 		return fmt.Errorf("failed to generate client keys: %w", err)
 	}
-	
+
 	fmt.Printf("✅ Client Public Key: %s\n", clientPubKey)
-	
+
 	// Prepare request
 	reqBody := RegisterRequest{
 		ClientPublicKey: clientPubKey,
 	}
-	
+
 	jsonData, err := json.Marshal(reqBody)
 	if err != nil {
 		return fmt.Errorf("failed to marshal request: %w", err)
 	}
-	
+
 	// Make HTTP request
 	fmt.Printf("📡 Registering with server: %s\n", serverURL)
 	resp, err := http.Post(serverURL+"/api/register", "application/json", bytes.NewBuffer(jsonData))
@@ -116,24 +116,24 @@ func runRegister(serverURL string) error {
 		return fmt.Errorf("failed to connect to server: %w", err)
 	}
 	defer resp.Body.Close()
-	
+
 	if resp.StatusCode != http.StatusOK {
 		return fmt.Errorf("server returned status %d", resp.StatusCode)
 	}
-	
+
 	// Parse response
 	var registerResp RegisterResponse
 	if err := json.NewDecoder(resp.Body).Decode(&registerResp); err != nil {
 		return fmt.Errorf("failed to parse response: %w", err)
 	}
-	
+
 	// Display results
 	fmt.Printf("✅ %s\n", registerResp.Message)
 	fmt.Printf("📋 Server Public Key: %s\n", registerResp.ServerPublicKey)
 	fmt.Printf("🕒 Timestamp: %s\n", registerResp.Timestamp)
-	
+
 	fmt.Println("\n🎉 Registration complete! Keys exchanged successfully.")
-	
+
 	return nil
 }
 

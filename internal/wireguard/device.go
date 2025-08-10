@@ -78,6 +78,22 @@ func (wd *WireGuardDevice) Stop() error {
 	return err
 }
 
+// IpcSet configures the device using IPC protocol
+func (wd *WireGuardDevice) IpcSet(config string) error {
+	if wd.device == nil {
+		return fmt.Errorf("device not initialized")
+	}
+	return wd.device.IpcSet(config)
+}
+
+// IpcGet retrieves device configuration using IPC protocol
+func (wd *WireGuardDevice) IpcGet() (string, error) {
+	if wd.device == nil {
+		return "", fmt.Errorf("device not initialized")
+	}
+	return wd.device.IpcGet()
+}
+
 // GenerateKeyPair generates a new WireGuard key pair using crypto/rand
 func GenerateKeyPair() (privateKey, publicKey [32]byte, err error) {
 	// Generate random private key
