@@ -92,7 +92,7 @@ func runRegister(serverURL string) error {
 	
 	// Generate client key pair
 	fmt.Println("Generating client key pair...")
-	clientPrivKey, clientPubKey, err := keys.GenerateKeyPair()
+	_, clientPubKey, err := keys.GenerateKeyPair()
 	if err != nil {
 		return fmt.Errorf("failed to generate client keys: %w", err)
 	}
