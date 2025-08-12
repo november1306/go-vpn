@@ -143,8 +143,9 @@ func (a *Allocator) allocateIPOptimized(existingUsers []UserIPInfo) (string, err
 	ip := make(net.IP, len(a.startIP))
 	copy(ip, a.startIP)
 
-	// Try to find next available IP
-	for attempts := 0; attempts < 253; attempts++ { // Max attempts to prevent infinite loop
+	// Calculate max attempts based on actual IP range size
+	maxAttempts := int(a.endIP[len(a.endIP)-1] - a.startIP[len(a.startIP)-1] + 1)
+	for attempts := 0; attempts < maxAttempts; attempts++ {
 		// Check if we've reached the end
 		if !a.isIPInRange(ip) {
 			break
@@ -212,8 +213,18 @@ func (a *Allocator) allocateIPLinear(existingUsers []UserIPInfo) (string, error)
 
 // updateAllocatedIPs updates the internal tracking from existing users
 func (a *Allocator) updateAllocatedIPs(existingUsers []UserIPInfo) {
-	// Clear current tracking (except gateway)
-	a.allocatedIPs = make(map[string]bool)
+	// Only recreate map if size changed significantly to avoid unnecessary allocations
+	expectedSize := len(existingUsers) + 1 // +1 for gateway
+	if len(a.allocatedIPs) == 0 || len(a.allocatedIPs) < expectedSize/2 || len(a.allocatedIPs) > expectedSize*2 {
+		a.allocatedIPs = make(map[string]bool, expectedSize)
+	} else {
+		// Clear existing entries efficiently
+		for k := range a.allocatedIPs {
+			delete(a.allocatedIPs, k)
+		}
+	}
+	
+	// Always ensure gateway is marked as allocated
 	a.allocatedIPs[a.gateway.String()] = true
 
 	// Add existing users
@@ -322,10 +333,14 @@ type NetworkInfo struct {
 
 // isIPInRange checks if an IP is within the allocation range
 func (a *Allocator) isIPInRange(ip net.IP) bool {
+	// Quick bounds check on last octet for performance
+	lastOctet := ip[len(ip)-1]
+	if lastOctet < a.startIP[len(a.startIP)-1] || lastOctet > a.endIP[len(a.endIP)-1] {
+		return false
+	}
+	
 	return a.cidr.Contains(ip) &&
-		!ip.Equal(a.startIP.Mask(a.cidr.Mask)) && // Not network address
-		ip[len(ip)-1] >= a.startIP[len(a.startIP)-1] &&
-		ip[len(ip)-1] <= a.endIP[len(a.endIP)-1]
+		!ip.Equal(a.startIP.Mask(a.cidr.Mask)) // Not network address
 }
 
 // incrementIP increments an IP address by 1
