@@ -50,7 +50,7 @@ type TestConfig struct {
 func Load() *Config {
 	return &Config{
 		Server: ServerConfig{
-			APIPort:       getEnvInt("VPN_API_PORT", 8443),
+			APIPort:       getEnvInt("PORT", getEnvInt("VPN_API_PORT", 8443)),
 			VPNPort:       getEnvInt("VPN_LISTEN_PORT", 51820),
 			InterfaceName: getEnvString("VPN_INTERFACE", "wg0"),
 		},
