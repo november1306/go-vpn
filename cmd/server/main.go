@@ -84,7 +84,7 @@ func handleRegister(w http.ResponseWriter, r *http.Request) {
 	// Add client to VPN server
 	clientIP := cfg.Network.ClientIPDemo // Use configured demo client IP
 	if err := vpnServer.AddClient(req.ClientPublicKey, clientIP); err != nil {
-		slog.Error("Failed to add client to VPN", "error", err, "clientKey", req.ClientPublicKey[:16]+"...")
+		slog.Error("Failed to add client to VPN", "error", err)
 		writeErrorJSON(w, http.StatusInternalServerError, "Failed to add client to VPN: "+err.Error())
 		return
 	}
@@ -96,7 +96,7 @@ func handleRegister(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	slog.Info("Client registered successfully", "clientKey", req.ClientPublicKey[:16]+"...", "clientIP", clientIP)
+	slog.Info("Client registered successfully", "clientIP", clientIP)
 
 	// Return connection details
 	response := RegisterResponse{
@@ -200,7 +200,7 @@ func main() {
 		
 		// Add hardcoded test peer if configured
 		if cfg.Test.PeerPublicKey != "" {
-			slog.Info("Adding hardcoded test peer", "peerKey", cfg.Test.PeerPublicKey[:16]+"...", "peerIP", cfg.Test.PeerIP)
+			slog.Info("Adding hardcoded test peer", "peerIP", cfg.Test.PeerIP)
 			if err := vpnServer.AddClient(cfg.Test.PeerPublicKey, cfg.Test.PeerIP); err != nil {
 				slog.Error("Failed to add test peer", "error", err)
 			} else {
