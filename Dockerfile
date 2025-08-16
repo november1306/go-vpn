@@ -1,4 +1,4 @@
-# Build stage
+# Build stage - Railway deployment compatible
 FROM golang:1.24-alpine AS builder
 
 # Install build dependencies

@@ -3,18 +3,24 @@
 ## System Architecture
 
 ```
-┌─────────────────┐         ┌─────────────────┐
-│   vpn-cli.exe   │◄──HTTPS──►│   server.exe    │
-│  (Windows CLI)  │           │ (Windows Server)│
-└─────────────────┘         └─────────────────┘
-         │                           │
-         │ WireGuard UDP             │ WireGuard UDP
-         │ (port 51820)              │ (port 51820)
-         │                           │
+┌─────────────────┐         ┌─────────────────────┐
+│   vpn-cli       │◄──HTTPS──►│  Hetzner Cloud VPS  │
+│ (Cross-platform)│           │    server binary    │
+└─────────────────┘         │  (Linux + Docker)   │
+         │                   └─────────────────────┘
+         │ WireGuard UDP              │
+         │ (port 51820)               │ Hetzner Cloud
+         │                           │ Network (10Gbps)
     ┌─────────┐                 ┌─────────┐
     │ wg-tun0 │                 │ wg-tun0 │
     │Interface│                 │Interface│
     └─────────┘                 └─────────┘
+                                      │
+                               ┌─────────────┐
+                               │ Hetzner     │
+                               │ Firewall    │
+                               │ Auto-config │
+                               └─────────────┘
 ```
 
 ## Component Design
@@ -22,29 +28,39 @@
 ### Server (`cmd/server`)
 
 **Core Responsibilities**:
-- HTTP API server with TLS
-- WireGuard interface management
+- HTTP API server with TLS (deployed on Hetzner Cloud)
+- WireGuard interface management via userspace backend
 - User authentication and registration
 - File-based storage with concurrency control
+- Hetzner Cloud integration for firewall management
 
 **Key Packages**:
 - `net/http` + middleware stack
-- `wireguard-go` for VPN tunneling
+- `wireguard-go` for VPN tunneling (userspace → kernel scalability path)
 - `crypto/rand` + `bcrypt` for security
 - `sync.RWMutex` for concurrent file access
+- `github.com/hetznercloud/hcloud-go` for API integration
+
+**Hetzner Optimizations**:
+- Automatic firewall rule creation for WireGuard UDP port
+- IPv6 support leveraging Hetzner's free IPv6 allocation
+- Integration with Hetzner's load balancer for multi-instance scaling
 
 ### CLI Client (`cmd/vpn-cli`)
 
 **Core Responsibilities**:
-- User command interface
+- Cross-platform user command interface
 - Local WireGuard interface management
-- API communication with server
-- Windows routing table manipulation
+- API communication with Hetzner-hosted server
+- Cross-platform routing table manipulation
 
 **Key Packages**:
 - `github.com/spf13/cobra` for CLI
 - `wireguard-go` for local tunnel
-- `os/exec` for Windows `netsh` commands
+- `os/exec` for platform-specific network commands:
+  - Windows: `netsh` commands
+  - Linux: `ip route` commands  
+  - macOS: `route` commands
 
 ## Data Persistence
 
@@ -75,22 +91,53 @@
 - Atomic writes via temp file + rename
 - In-memory cache for fast user lookups
 
-## Windows Integration
+## Cross-Platform Integration
 
 ### Network Configuration
-- **Interface Creation**: `wireguard-go` handles TUN device
-- **IP Assignment**: `netsh interface ip set address`
-- **Routing**: `netsh interface ip add route 0.0.0.0/0`
-- **DNS**: `netsh interface ip set dns` (optional)
+- **Interface Creation**: `wireguard-go` handles TUN device (all platforms)
+- **IP Assignment & Routing**:
+  - Windows: `netsh interface ip set address` + `netsh interface ip add route`
+  - Linux: `ip addr add` + `ip route add`
+  - macOS: `ifconfig` + `route add`
+- **DNS Configuration**: Platform-specific DNS resolver updates
 
 ### Privilege Requirements
-- **Server**: Administrator for binding ports, creating interfaces
-- **Client**: Administrator for route manipulation
+- **Server** (Hetzner Cloud): Standard user (no root needed for userspace WG)
+- **Client**: Platform-specific privileges for route manipulation:
+  - Windows: Administrator for route changes
+  - Linux: root or CAP_NET_ADMIN capability
+  - macOS: root for route changes
 
 ### Error Handling
-- Check Administrator privileges on startup
+- Check required privileges on startup per platform
 - Graceful cleanup on SIGINT/SIGTERM
 - Restore original routes on disconnect failure
+- Platform-specific error messages with resolution guidance
+
+## Hetzner Cloud Integration
+
+### Deployment Architecture
+- **Primary**: Hetzner Cloud CX22 (€3.79/month) - 2 vCPU, 4GB RAM, 40GB SSD
+- **Scaling**: CX32+ for higher user loads (€6.80/month) - 4 vCPU, 8GB RAM
+- **Network**: 20TB included bandwidth in EU, 1TB in US/Singapore
+- **Locations**: Germany (Nuremberg, Falkenstein), Finland, USA, Singapore
+
+### Automated Provisioning
+```go
+// Hetzner Cloud server creation
+func (h *HetznerProvisioner) CreateVPNServer(ctx context.Context, config ServerConfig) (*Server, error) {
+    // 1. Create server instance
+    // 2. Configure firewall rules (UDP 51820, HTTPS 8443)
+    // 3. Deploy VPN binary via cloud-init
+    // 4. Configure DNS A record
+    // 5. Generate and install TLS certificates
+}
+```
+
+### Firewall Integration
+- Automatic security group creation for WireGuard + API ports
+- IPv4 + IPv6 rules (Hetzner provides free IPv6 /64)
+- Integration with existing Hetzner Cloud Firewall rules
 
 ## Security Model
 
@@ -230,22 +277,41 @@ logger.With(
 
 ## Deployment Architecture
 
-### Directory Structure
+### Hetzner Cloud Deployment
 ```
-C:\Program Files\GoWire\
-├── server.exe
-├── vpn-cli.exe
-├── server.yaml
-├── data\
+/opt/govpn/
+├── server (Linux binary)
+├── config/
+│   ├── server.yaml
+│   └── hetzner.yaml (cloud integration config)
+├── data/
 │   ├── users.json
 │   ├── wg-server.conf
-│   └── logs\
-└── certs\
-    ├── server.crt
-    └── server.key
+│   └── logs/
+├── certs/
+│   ├── server.crt (Let's Encrypt)
+│   └── server.key
+└── scripts/
+    ├── setup.sh (cloud-init script)
+    └── update.sh (rolling updates)
 ```
 
-### Service Installation (Future)
-- Windows Service wrapper
-- Auto-start on boot
-- Service recovery policies
+### Client Installation (Cross-Platform)
+```
+# Windows
+C:\Program Files\GoWire\vpn-cli.exe
+
+# Linux/macOS  
+/usr/local/bin/vpn-cli
+~/.config/govpn/client.yaml
+```
+
+### Service Management
+- **Hetzner**: systemd service with auto-restart
+- **Monitoring**: Basic health checks via Hetzner Cloud monitoring
+- **Updates**: Blue-green deployment for zero-downtime updates
+
+### Future Multi-Cloud Support
+- **Interface**: `CloudProvider` abstraction for AWS, GCP, Azure
+- **Config**: Provider-specific configuration modules
+- **Migration**: Cross-cloud migration tools for server relocation

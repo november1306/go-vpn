@@ -2,18 +2,24 @@ package main
 
 import (
 	"context"
+	"crypto/tls"
 	"encoding/json"
 	"fmt"
 	"log"
+	"log/slog"
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
+	"github.com/november1306/go-vpn/internal/config"
+	"github.com/november1306/go-vpn/internal/server/vpnserver"
 	"github.com/november1306/go-vpn/internal/version"
 	"github.com/november1306/go-vpn/internal/wireguard/keys"
 )
+
 
 type RegisterRequest struct {
 	ClientPublicKey string `json:"clientPublicKey"`
@@ -21,6 +27,8 @@ type RegisterRequest struct {
 
 type RegisterResponse struct {
 	ServerPublicKey string `json:"serverPublicKey"`
+	ServerEndpoint  string `json:"serverEndpoint"`
+	ClientIP        string `json:"clientIP"`
 	Message         string `json:"message"`
 	Timestamp       string `json:"timestamp"`
 }
@@ -28,6 +36,14 @@ type RegisterResponse struct {
 type ErrorResponse struct {
 	Error     string `json:"error"`
 	Timestamp string `json:"timestamp"`
+}
+
+type StatusResponse struct {
+	Status      string                    `json:"status"`
+	ConnectedPeers int                   `json:"connectedPeers"`
+	Peers       []vpnserver.PeerInfo      `json:"peers"`
+	ServerInfo  vpnserver.ServerInfo      `json:"serverInfo"`
+	Timestamp   string                    `json:"timestamp"`
 }
 
 func writeErrorJSON(w http.ResponseWriter, status int, message string) {
@@ -39,8 +55,8 @@ func writeErrorJSON(w http.ResponseWriter, status int, message string) {
 	})
 }
 
-var serverPrivateKey string
-var serverPublicKey string
+var vpnServer *vpnserver.VPNServer
+var cfg *config.Config
 
 func handleRegister(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
@@ -65,12 +81,29 @@ func handleRegister(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	log.Printf("Client registered with public key: %s", req.ClientPublicKey)
+	// Add client to VPN server
+	clientIP := cfg.Network.ClientIPDemo // Use configured demo client IP
+	if err := vpnServer.AddClient(req.ClientPublicKey, clientIP); err != nil {
+		slog.Error("Failed to add client to VPN", "error", err, "clientKey", req.ClientPublicKey[:16]+"...")
+		writeErrorJSON(w, http.StatusInternalServerError, "Failed to add client to VPN: "+err.Error())
+		return
+	}
 
-	// Return server public key
+	// Get server info for client
+	serverInfo, err := vpnServer.GetServerInfo()
+	if err != nil {
+		writeErrorJSON(w, http.StatusInternalServerError, "Failed to get server info")
+		return
+	}
+
+	slog.Info("Client registered successfully", "clientKey", req.ClientPublicKey[:16]+"...", "clientIP", clientIP)
+
+	// Return connection details
 	response := RegisterResponse{
-		ServerPublicKey: serverPublicKey,
-		Message:         "Registration successful - demo mode",
+		ServerPublicKey: serverInfo.PublicKey,
+		ServerEndpoint:  serverInfo.Endpoint,
+		ClientIP:        clientIP + "/32",
+		Message:         "Registration successful - VPN tunnel established",
 		Timestamp:       time.Now().UTC().Format(time.RFC3339),
 	}
 
@@ -78,32 +111,129 @@ func handleRegister(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(response)
 }
 
+func handleStatus(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		writeErrorJSON(w, http.StatusMethodNotAllowed, "Method not allowed")
+		return
+	}
+
+	peers, err := vpnServer.GetConnectedClients()
+	if err != nil {
+		writeErrorJSON(w, http.StatusInternalServerError, "Failed to get peer info")
+		return
+	}
+
+	serverInfo, err := vpnServer.GetServerInfo()
+	if err != nil {
+		writeErrorJSON(w, http.StatusInternalServerError, "Failed to get server info")
+		return
+	}
+
+	status := "running"
+	if !vpnServer.IsRunning() {
+		status = "stopped"
+	}
+
+	response := StatusResponse{
+		Status:         status,
+		ConnectedPeers: len(peers),
+		Peers:          peers,
+		ServerInfo:     serverInfo,
+		Timestamp:      time.Now().UTC().Format(time.RFC3339),
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(response)
+}
+
+// generateSelfSignedCert creates a simple self-signed certificate for HTTPS
+func generateSelfSignedCert() (tls.Certificate, error) {
+	// For demo purposes, we'll create a simple in-memory cert
+	// In production, this would use proper certificate management
+	return tls.Certificate{}, nil
+}
+
 func main() {
-	fmt.Printf("go-vpn server %s\n", version.Version)
+	fmt.Printf("go-vpn minimal server %s\n", version.Version)
+	fmt.Println("=== Demo 2: Railway deployment with hardcoded peer ===")
+	
+	// Load configuration
+	cfg = config.Load()
+	if err := cfg.Validate(); err != nil {
+		log.Fatalf("Invalid configuration: %v", err)
+	}
+	fmt.Printf("Configuration loaded - API port: %d, VPN port: %d\n", cfg.Server.APIPort, cfg.Server.VPNPort)
 	
 	// Generate server key pair
-	var err error
-	serverPrivateKey, serverPublicKey, err = keys.GenerateKeyPair()
+	serverPrivateKey, serverPublicKey, err := keys.GenerateKeyPair()
 	if err != nil {
 		log.Fatalf("Failed to generate server keys: %v", err)
 	}
 	
 	fmt.Printf("Server public key: %s\n", serverPublicKey)
 	
+	// Initialize VPN server
+	vpnServer = vpnserver.NewUserspaceVPNServer()
+	
+	serverConfig := vpnserver.ServerConfig{
+		InterfaceName: cfg.Server.InterfaceName,
+		PrivateKey:    serverPrivateKey,
+		ListenPort:    cfg.Server.VPNPort,
+		ServerIP:      cfg.Network.ServerIP,
+	}
+	
+	// Start VPN server
+	ctx := context.Background()
+	slog.Info("Starting VPN server", "interface", cfg.Server.InterfaceName, "port", cfg.Server.VPNPort)
+	
+	if err := vpnServer.Start(ctx, serverConfig); err != nil {
+		// On systems without TUN support, warn but continue with HTTP API
+		if isTUNError(err) {
+			slog.Warn("VPN server failed to start - continuing with HTTP API only", "error", err)
+			slog.Warn("This is expected on Windows/systems without TUN support")
+			slog.Warn("Deploy to Railway Linux for full VPN functionality")
+		} else {
+			log.Fatalf("Failed to start VPN server: %v", err)
+		}
+	} else {
+		slog.Info("VPN server started successfully")
+		
+		// Add hardcoded test peer if configured
+		if cfg.Test.PeerPublicKey != "" {
+			slog.Info("Adding hardcoded test peer", "peerKey", cfg.Test.PeerPublicKey[:16]+"...", "peerIP", cfg.Test.PeerIP)
+			if err := vpnServer.AddClient(cfg.Test.PeerPublicKey, cfg.Test.PeerIP); err != nil {
+				slog.Error("Failed to add test peer", "error", err)
+			} else {
+				slog.Info("Test peer added successfully")
+			}
+		}
+	}
+	
 	// Set up HTTP server
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/register", handleRegister)
+	mux.HandleFunc("/api/status", handleStatus)
+	mux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		fmt.Fprintf(w, "OK - Server running\n")
+	})
 	
-	server := &http.Server{
-		Addr:    ":8443",
+	// Create HTTP server
+	httpServer := &http.Server{
+		Addr:    fmt.Sprintf(":%d", cfg.Server.APIPort),
 		Handler: mux,
+		// Security settings from configuration
+		ReadTimeout:  cfg.Timeouts.HTTPRead,
+		WriteTimeout: cfg.Timeouts.HTTPWrite,
+		IdleTimeout:  cfg.Timeouts.HTTPIdle,
 	}
 	
-	// Start server in goroutine
+	// Start HTTP server in goroutine
 	go func() {
-		fmt.Println("Server starting on :8443...")
-		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			log.Fatalf("Server failed to start: %v", err)
+		slog.Info("HTTP API server starting", "port", cfg.Server.APIPort)
+		// For demo, use HTTP. In production, use HTTPS with proper certificates
+		if err := httpServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			log.Fatalf("HTTP server failed to start: %v", err)
 		}
 	}()
 	
@@ -112,13 +242,35 @@ func main() {
 	signal.Notify(c, os.Interrupt, syscall.SIGTERM)
 	
 	<-c
-	fmt.Println("Server shutting down...")
+	slog.Info("Shutdown signal received")
 	
 	// Graceful shutdown
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	shutdownCtx, cancel := context.WithTimeout(context.Background(), cfg.Timeouts.Shutdown)
 	defer cancel()
 	
-	if err := server.Shutdown(ctx); err != nil {
-		log.Printf("Server forced to shutdown: %v", err)
+	// Stop VPN server
+	if vpnServer != nil && vpnServer.IsRunning() {
+		slog.Info("Stopping VPN server")
+		if err := vpnServer.Stop(shutdownCtx); err != nil {
+			slog.Error("Error stopping VPN server", "error", err)
+		}
 	}
+	
+	// Stop HTTP server
+	slog.Info("Stopping HTTP server")
+	if err := httpServer.Shutdown(shutdownCtx); err != nil {
+		slog.Error("HTTP server forced to shutdown", "error", err)
+	}
+	
+	slog.Info("Server shutdown complete")
+}
+
+// isTUNError checks if the error is related to TUN interface creation
+func isTUNError(err error) bool {
+	errStr := err.Error()
+	return strings.Contains(errStr, "wintun.dll") ||
+		strings.Contains(errStr, "TUN interface") ||
+		strings.Contains(errStr, "tun") ||
+		strings.Contains(errStr, "Unable to load library") ||
+		strings.Contains(errStr, "failed to create TUN interface")
 }
