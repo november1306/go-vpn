@@ -55,6 +55,15 @@ func DefaultConfig() Config {
 	}
 }
 
+// ConfigFromNetwork creates an IPAM config from network configuration
+func ConfigFromNetwork(cidr, gateway string) Config {
+	return Config{
+		CIDR:                cidr,
+		Gateway:             gateway,
+		EnableOptimizations: true,
+	}
+}
+
 // NewAllocator creates a new IP allocator with the given configuration
 func NewAllocator(config Config) (*Allocator, error) {
 	// Parse CIDR

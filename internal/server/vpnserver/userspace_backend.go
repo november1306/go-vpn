@@ -98,7 +98,7 @@ func (ub *UserspaceBackend) AddPeer(publicKey string, allowedIPs []string) error
 		return fmt.Errorf("backend not running")
 	}
 	
-	slog.Info("Adding peer to userspace backend", "publicKey", publicKey[:16]+"...", "allowedIPs", allowedIPs)
+	slog.Info("Adding peer to userspace backend", "allowedIPs", allowedIPs)
 	
 	// Build IPC configuration string to add peer
 	// Format: set=1\npublic_key=<key>\nallowed_ip=<ip1>\nallowed_ip=<ip2>\n
@@ -118,7 +118,7 @@ func (ub *UserspaceBackend) AddPeer(publicKey string, allowedIPs []string) error
 	// Track peer for management
 	ub.peers[publicKey] = allowedIPs
 	
-	slog.Info("Peer added successfully", "publicKey", publicKey[:16]+"...", "peerCount", len(ub.peers))
+	slog.Info("Peer added successfully", "peerCount", len(ub.peers))
 	return nil
 }
 
@@ -131,7 +131,7 @@ func (ub *UserspaceBackend) RemovePeer(publicKey string) error {
 		return fmt.Errorf("backend not running")
 	}
 	
-	slog.Info("Removing peer from userspace backend", "publicKey", publicKey[:16]+"...")
+	slog.Info("Removing peer from userspace backend")
 	
 	// Build IPC configuration string to remove peer
 	config := "set=1\n"
@@ -146,7 +146,7 @@ func (ub *UserspaceBackend) RemovePeer(publicKey string) error {
 	// Remove from tracking
 	delete(ub.peers, publicKey)
 	
-	slog.Info("Peer removed successfully", "publicKey", publicKey[:16]+"...", "peerCount", len(ub.peers))
+	slog.Info("Peer removed successfully", "peerCount", len(ub.peers))
 	return nil
 }
 
@@ -189,6 +189,7 @@ func (ub *UserspaceBackend) IsRunning() bool {
 func (ub *UserspaceBackend) configureDevice(wgDevice *wireguard.WireGuardDevice, config ServerConfig) error {
 	// Build IPC configuration for server setup
 	// Format: private_key=<key>\nlisten_port=<port>\n
+	// Note: Private key is passed directly to WireGuard IPC, not logged
 	ipcConfig := fmt.Sprintf("private_key=%s\nlisten_port=%d\n", config.PrivateKey, config.ListenPort)
 	
 	return ub.applyIPCConfig(ipcConfig)
@@ -200,6 +201,7 @@ func (ub *UserspaceBackend) applyIPCConfig(config string) error {
 		return fmt.Errorf("device not initialized")
 	}
 	
+	// SECURITY: Do not log IPC config as it contains private key material
 	// Use the exposed IPC method from our WireGuardDevice wrapper
 	return ub.device.IpcSet(config)
 }

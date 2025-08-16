@@ -125,13 +125,12 @@ func BasicDeviceDemo() error {
 	log.Println("Starting WireGuard device demonstration...")
 
 	// Generate a key pair
-	_, publicKey, err := GenerateKeyPair()
+	_, _, err := GenerateKeyPair()
 	if err != nil {
 		return fmt.Errorf("key generation failed: %w", err)
 	}
 
-	log.Printf("Generated key pair - Public key: %x", publicKey)
-	// Private key is not logged for security reasons
+	// Keys are not logged for security reasons
 
 	// Create device (this will fail without proper permissions, but shows the API)
 	log.Println("Creating WireGuard device...")

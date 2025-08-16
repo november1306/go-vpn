@@ -99,7 +99,7 @@ func (s *VPNServer) AddClient(publicKey string, clientIP string) error {
 		return fmt.Errorf("VPN server not running")
 	}
 	
-	slog.Info("Adding VPN client", "publicKey", publicKey[:16]+"...", "clientIP", clientIP)
+	slog.Info("Adding VPN client", "clientIP", clientIP)
 	
 	// Client gets their assigned IP as their allowed IP range
 	// This means they can only send traffic from this specific IP
@@ -109,7 +109,7 @@ func (s *VPNServer) AddClient(publicKey string, clientIP string) error {
 		return fmt.Errorf("failed to add client peer: %w", err)
 	}
 	
-	slog.Info("VPN client added successfully", "publicKey", publicKey[:16]+"...", "clientIP", clientIP)
+	slog.Info("VPN client added successfully", "clientIP", clientIP)
 	return nil
 }
 
@@ -122,13 +122,13 @@ func (s *VPNServer) RemoveClient(publicKey string) error {
 		return fmt.Errorf("VPN server not running")
 	}
 	
-	slog.Info("Removing VPN client", "publicKey", publicKey[:16]+"...")
+	slog.Info("Removing VPN client")
 	
 	if err := s.backend.RemovePeer(publicKey); err != nil {
 		return fmt.Errorf("failed to remove client peer: %w", err)
 	}
 	
-	slog.Info("VPN client removed successfully", "publicKey", publicKey[:16]+"...")
+	slog.Info("VPN client removed successfully")
 	return nil
 }
 

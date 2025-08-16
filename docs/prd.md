@@ -1,59 +1,74 @@
 # Product Requirements Document: GoWire VPN MVP
 
-**Target**: Windows development environment and Windows end users  
-**Timeline**: MVP focused on core functionality, database deferred post-MVP
+**Primary Target**: Hetzner Cloud Linux server with cross-platform clients  
+**Timeline**: MVP focused on Hetzner deployment, other cloud providers deferred post-MVP
 
 ## MVP Scope
 
 **Core Features**:
-- Single Windows server hosting WireGuard VPN
-- CLI client for Windows users (`register`, `connect`, `disconnect`, `status`)
+- **Hetzner Cloud VPN server** hosting WireGuard with automated setup
+- Cross-platform CLI client (`register`, `connect`, `disconnect`, `status`)
 - API key authentication with secure storage
 - File-based persistence (JSON) with atomic writes and concurrency safety
+- Hetzner-optimized networking and firewall configuration
 - Basic logging and error handling
 
 **Explicit Non-Goals**:
-- Multi-server/load balancing
+- Multi-cloud/multi-server deployment (AWS, GCP, Azure - postponed)
 - Database integration (postponed)
 - GUI interface
-- Linux/macOS support (Windows-first)
-- Advanced monitoring/metrics
+- Advanced monitoring/metrics beyond basic connectivity
 - Payment/billing systems
+- Manual server setup (focus on Hetzner automation)
 
 ## Architecture Overview
 
 **Components**:
-- `cmd/server`: VPN server with HTTPS API + WireGuard interface
-- `cmd/vpn-cli`: Windows CLI client
-- `internal/`: shared packages (auth, storage, config, logging)
+- `cmd/server`: VPN server with HTTPS API + WireGuard interface (runs on Hetzner Cloud)
+- `cmd/vpn-cli`: Cross-platform CLI client (Windows/Linux/macOS)
+- `internal/`: shared packages (auth, storage, config, logging, hetzner-integration)
 
 **Communication**:
 - Control plane: HTTPS REST API (port 8443)
 - Data plane: WireGuard UDP (port 51820)
 - Storage: JSON files with file locking
 
+**Hetzner Integration**:
+- Automated server provisioning via Hetzner Cloud API
+- Optimized for Hetzner's network topology and firewall rules
+- Cost-effective scaling on Hetzner's €3.79/month CX22 servers
+
 ## Technical Decisions
 
-**Platform**: Windows-first with Go cross-compilation support  
-**WireGuard**: `wireguard-go` userspace implementation  
-**Network**: IPv4 only, default subnet `10.0.0.0/24`  
+**Hosting**: Hetzner Cloud Linux servers (primary), extensible to other providers  
+**Platform**: Cross-platform clients with Go, Linux server deployment  
+**WireGuard**: `wireguard-go` userspace implementation (scales to kernel when needed)  
+**Network**: IPv4 primary, IPv6 ready (Hetzner provides free IPv6)  
+**Subnets**: `10.0.0.0/24` default, configurable for larger deployments  
 **Authentication**: 32-byte random API keys, bcrypt hashed  
-**TLS**: Required for API (self-signed certificates for dev)  
-**Privileges**: Administrator rights required for network configuration
+**TLS**: Required for API (Let's Encrypt for production, self-signed for dev)  
+**Firewall**: Hetzner Cloud Firewall integration for automatic security rules
 
 ## User Workflow
 
-1. **Setup**: Admin runs `server.exe`, generates TLS certificates
-2. **Register**: User runs `vpn-cli register user@example.com`
-3. **Connect**: User runs `vpn-cli connect` (requires Admin)
+1. **Server Setup**: Deploy to Hetzner Cloud via automated script or manual installation
+2. **Register**: User runs `vpn-cli register user@example.com --server hetzner-vpn.example.com`
+3. **Connect**: User runs `vpn-cli connect` (handles routing automatically)
 4. **Disconnect**: User runs `vpn-cli disconnect`
-5. **Status**: User runs `vpn-cli status` (shows connection state)
+5. **Status**: User runs `vpn-cli status` (shows connection state, server location)
+
+**Hetzner-Specific Benefits**:
+- Fast deployment (< 2 minutes from API call to running VPN)
+- Global locations (Germany, Finland, USA, Singapore)
+- Consistent 1Gbps performance even on basic servers
 
 ## Success Criteria
 
-- Windows users can register and establish VPN connection
+- Cross-platform users can register and establish VPN connection to Hetzner servers
 - All internet traffic routes through VPN when connected
 - Secure API key authentication prevents unauthorized access
-- Server handles multiple concurrent users
+- Server handles multiple concurrent users (target: 100+ on basic Hetzner instance)
 - Clean connection/disconnection without network disruption
 - Basic operational visibility through logs
+- **Hetzner-specific**: Sub-€5/month operating cost for small user base
+- **Future-ready**: Architecture supports migration to other cloud providers
