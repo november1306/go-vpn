@@ -7,6 +7,11 @@
 # Clone and start
 git clone <repository-url>
 cd go-vpn
+
+# Build and test with Make
+make test-docker
+
+# Or use docker-compose directly
 docker-compose up --build
 ```
 
@@ -181,6 +186,47 @@ iptables -A INPUT -p udp --dport 51820 -j ACCEPT
 # Docker published ports are automatically handled
 ```
 
+## Testing
+
+### Automated Testing
+The project includes comprehensive Docker testing via Make:
+
+```bash
+# Run Docker container tests
+make test-docker
+
+# Run full integration test suite
+make test-integration
+
+# Run all tests (unit + integration + docker)
+make test-all
+```
+
+### Manual Container Testing
+```bash
+# Build image
+make docker-build
+
+# Test with integration script
+./scripts/test-container.sh go-vpn:latest
+
+# Manual testing
+docker run -d --name test-vpn \
+  --cap-add NET_ADMIN \
+  -p 8443:8443 \
+  -p 51820:51820/udp \
+  go-vpn:latest
+
+# Check container logs
+docker logs test-vpn
+
+# Test API
+curl http://localhost:8443/health
+
+# Cleanup
+docker stop test-vpn && docker rm test-vpn
+```
+
 ## Troubleshooting
 
 ### Common Issues
@@ -211,6 +257,9 @@ docker run -v /lib/modules:/lib/modules:ro ...
 
 ### Diagnostic Commands
 ```bash
+# Run full diagnostic test suite
+make test-docker
+
 # Check container status
 docker ps
 docker logs go-vpn-server
@@ -223,6 +272,9 @@ curl http://localhost:8443/health
 
 # Monitor container resources
 docker stats go-vpn-server
+
+# Build fresh image for testing
+make docker-build
 ```
 
 ### Log Analysis

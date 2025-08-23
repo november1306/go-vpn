@@ -232,7 +232,7 @@ func (a *Allocator) updateAllocatedIPs(existingUsers []UserIPInfo) {
 			delete(a.allocatedIPs, k)
 		}
 	}
-	
+
 	// Always ensure gateway is marked as allocated
 	a.allocatedIPs[a.gateway.String()] = true
 
@@ -347,7 +347,7 @@ func (a *Allocator) isIPInRange(ip net.IP) bool {
 	if lastOctet < a.startIP[len(a.startIP)-1] || lastOctet > a.endIP[len(a.endIP)-1] {
 		return false
 	}
-	
+
 	return a.cidr.Contains(ip) &&
 		!ip.Equal(a.startIP.Mask(a.cidr.Mask)) // Not network address
 }

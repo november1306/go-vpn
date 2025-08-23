@@ -54,7 +54,7 @@ func (wd *WireGuardDevice) Start() error {
 // Stop brings down the WireGuard device
 func (wd *WireGuardDevice) Stop() error {
 	var err error
-	
+
 	// Close device first, but don't let panic prevent TUN cleanup
 	if wd.device != nil {
 		func() {
@@ -67,14 +67,14 @@ func (wd *WireGuardDevice) Stop() error {
 			wd.device.Close()
 		}()
 	}
-	
+
 	// Always attempt TUN cleanup
 	if wd.tun != nil {
 		if closeErr := wd.tun.Close(); closeErr != nil {
 			err = fmt.Errorf("failed to close TUN interface: %w", closeErr)
 		}
 	}
-	
+
 	return err
 }
 

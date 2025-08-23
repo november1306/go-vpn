@@ -166,7 +166,7 @@ func TestPublicKeyFromPrivate(t *testing.T) {
 		}
 
 		if derivedPublicKey != expectedPublicKey {
-			t.Errorf("derived public key doesn't match expected:\nexpected: %s\nderived:  %s", 
+			t.Errorf("derived public key doesn't match expected:\nexpected: %s\nderived:  %s",
 				expectedPublicKey, derivedPublicKey)
 		}
 	})
