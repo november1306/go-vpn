@@ -20,7 +20,6 @@ import (
 	"github.com/november1306/go-vpn/internal/wireguard/keys"
 )
 
-
 type RegisterRequest struct {
 	ClientPublicKey string `json:"clientPublicKey"`
 }
@@ -39,11 +38,11 @@ type ErrorResponse struct {
 }
 
 type StatusResponse struct {
-	Status      string                    `json:"status"`
-	ConnectedPeers int                   `json:"connectedPeers"`
-	Peers       []vpnserver.PeerInfo      `json:"peers"`
-	ServerInfo  vpnserver.ServerInfo      `json:"serverInfo"`
-	Timestamp   string                    `json:"timestamp"`
+	Status         string               `json:"status"`
+	ConnectedPeers int                  `json:"connectedPeers"`
+	Peers          []vpnserver.PeerInfo `json:"peers"`
+	ServerInfo     vpnserver.ServerInfo `json:"serverInfo"`
+	Timestamp      string               `json:"timestamp"`
 }
 
 func writeErrorJSON(w http.ResponseWriter, status int, message string) {
@@ -156,36 +155,36 @@ func generateSelfSignedCert() (tls.Certificate, error) {
 func main() {
 	fmt.Printf("go-vpn minimal server %s\n", version.Version)
 	fmt.Println("=== Demo 2: Railway deployment with hardcoded peer ===")
-	
+
 	// Load configuration
 	cfg = config.Load()
 	if err := cfg.Validate(); err != nil {
 		log.Fatalf("Invalid configuration: %v", err)
 	}
 	fmt.Printf("Configuration loaded - API port: %d, VPN port: %d\n", cfg.Server.APIPort, cfg.Server.VPNPort)
-	
+
 	// Generate server key pair
 	serverPrivateKey, serverPublicKey, err := keys.GenerateKeyPair()
 	if err != nil {
 		log.Fatalf("Failed to generate server keys: %v", err)
 	}
-	
+
 	fmt.Printf("Server public key: %s\n", serverPublicKey)
-	
+
 	// Initialize VPN server
 	vpnServer = vpnserver.NewUserspaceVPNServer()
-	
+
 	serverConfig := vpnserver.ServerConfig{
 		InterfaceName: cfg.Server.InterfaceName,
 		PrivateKey:    serverPrivateKey,
 		ListenPort:    cfg.Server.VPNPort,
 		ServerIP:      cfg.Network.ServerIP,
 	}
-	
+
 	// Start VPN server
 	ctx := context.Background()
 	slog.Info("Starting VPN server", "interface", cfg.Server.InterfaceName, "port", cfg.Server.VPNPort)
-	
+
 	if err := vpnServer.Start(ctx, serverConfig); err != nil {
 		// On systems without TUN support, warn but continue with HTTP API
 		if isTUNError(err) {
@@ -197,7 +196,7 @@ func main() {
 		}
 	} else {
 		slog.Info("VPN server started successfully")
-		
+
 		// Add hardcoded test peer if configured
 		if cfg.Test.PeerPublicKey != "" {
 			slog.Info("Adding hardcoded test peer", "peerIP", cfg.Test.PeerIP)
@@ -208,7 +207,7 @@ func main() {
 			}
 		}
 	}
-	
+
 	// Set up HTTP server
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/register", handleRegister)
@@ -217,7 +216,7 @@ func main() {
 		w.WriteHeader(http.StatusOK)
 		fmt.Fprintf(w, "OK - Server running\n")
 	})
-	
+
 	// Create HTTP server
 	httpServer := &http.Server{
 		Addr:    fmt.Sprintf(":%d", cfg.Server.APIPort),
@@ -227,7 +226,7 @@ func main() {
 		WriteTimeout: cfg.Timeouts.HTTPWrite,
 		IdleTimeout:  cfg.Timeouts.HTTPIdle,
 	}
-	
+
 	// Start HTTP server in goroutine
 	go func() {
 		slog.Info("HTTP API server starting", "port", cfg.Server.APIPort)
@@ -236,18 +235,18 @@ func main() {
 			log.Fatalf("HTTP server failed to start: %v", err)
 		}
 	}()
-	
+
 	// Wait for interrupt signal
 	c := make(chan os.Signal, 1)
 	signal.Notify(c, os.Interrupt, syscall.SIGTERM)
-	
+
 	<-c
 	slog.Info("Shutdown signal received")
-	
+
 	// Graceful shutdown
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), cfg.Timeouts.Shutdown)
 	defer cancel()
-	
+
 	// Stop VPN server
 	if vpnServer != nil && vpnServer.IsRunning() {
 		slog.Info("Stopping VPN server")
@@ -255,13 +254,13 @@ func main() {
 			slog.Error("Error stopping VPN server", "error", err)
 		}
 	}
-	
+
 	// Stop HTTP server
 	slog.Info("Stopping HTTP server")
 	if err := httpServer.Shutdown(shutdownCtx); err != nil {
 		slog.Error("HTTP server forced to shutdown", "error", err)
 	}
-	
+
 	slog.Info("Server shutdown complete")
 }
 
@@ -272,5 +271,6 @@ func isTUNError(err error) bool {
 		strings.Contains(errStr, "TUN interface") ||
 		strings.Contains(errStr, "tun") ||
 		strings.Contains(errStr, "Unable to load library") ||
-		strings.Contains(errStr, "failed to create TUN interface")
+		strings.Contains(errStr, "failed to create TUN interface") ||
+		strings.Contains(errStr, "device not initialized")
 }

@@ -9,7 +9,7 @@ import (
 func TestLoad(t *testing.T) {
 	// Test default configuration
 	config := Load()
-	
+
 	// Verify server defaults
 	if config.Server.APIPort != 8443 {
 		t.Errorf("Expected API port 8443, got %d", config.Server.APIPort)
@@ -20,7 +20,7 @@ func TestLoad(t *testing.T) {
 	if config.Server.InterfaceName != "wg0" {
 		t.Errorf("Expected interface wg0, got %s", config.Server.InterfaceName)
 	}
-	
+
 	// Verify network defaults
 	if config.Network.ServerIP != "10.0.0.1/24" {
 		t.Errorf("Expected server IP 10.0.0.1/24, got %s", config.Network.ServerIP)
@@ -31,7 +31,7 @@ func TestLoad(t *testing.T) {
 	if config.Network.IPAMGateway != "10.0.0.1" {
 		t.Errorf("Expected IPAM gateway 10.0.0.1, got %s", config.Network.IPAMGateway)
 	}
-	
+
 	// Verify timeout defaults
 	if config.Timeouts.HTTPRead != 15*time.Second {
 		t.Errorf("Expected HTTP read timeout 15s, got %v", config.Timeouts.HTTPRead)
@@ -39,7 +39,7 @@ func TestLoad(t *testing.T) {
 	if config.Timeouts.Shutdown != 10*time.Second {
 		t.Errorf("Expected shutdown timeout 10s, got %v", config.Timeouts.Shutdown)
 	}
-	
+
 	// Verify test defaults
 	if config.Test.PeerIP != "10.0.0.2" {
 		t.Errorf("Expected test peer IP 10.0.0.2, got %s", config.Test.PeerIP)
@@ -57,7 +57,7 @@ func TestLoadWithEnvironmentVariables(t *testing.T) {
 	os.Setenv("VPN_SERVER_IP", "192.168.1.1/24")
 	os.Setenv("VPN_HTTP_READ_TIMEOUT", "30s")
 	os.Setenv("VPN_TEST_PEER_IP", "192.168.1.10")
-	
+
 	defer func() {
 		// Clean up environment variables
 		os.Unsetenv("VPN_API_PORT")
@@ -67,9 +67,9 @@ func TestLoadWithEnvironmentVariables(t *testing.T) {
 		os.Unsetenv("VPN_HTTP_READ_TIMEOUT")
 		os.Unsetenv("VPN_TEST_PEER_IP")
 	}()
-	
+
 	config := Load()
-	
+
 	// Verify environment variables override defaults
 	if config.Server.APIPort != 9443 {
 		t.Errorf("Expected API port 9443, got %d", config.Server.APIPort)
@@ -179,7 +179,7 @@ func TestGetEnvHelpers(t *testing.T) {
 		t.Errorf("getEnvString() = %v, want default", val)
 	}
 	os.Unsetenv("TEST_STRING")
-	
+
 	// Test getEnvInt
 	os.Setenv("TEST_INT", "123")
 	if val := getEnvInt("TEST_INT", 456); val != 123 {
@@ -193,7 +193,7 @@ func TestGetEnvHelpers(t *testing.T) {
 		t.Errorf("getEnvInt() with invalid value = %v, want 456", val)
 	}
 	os.Unsetenv("TEST_INT")
-	
+
 	// Test getEnvDuration
 	os.Setenv("TEST_DURATION", "5m")
 	if val := getEnvDuration("TEST_DURATION", 10*time.Second); val != 5*time.Minute {

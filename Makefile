@@ -1,10 +1,16 @@
 # Makefile for go-vpn project
 
-.PHONY: build test test-unit test-integration test-docker test-all lint fmt clean clean-all download-wintun help
+.PHONY: build build-server build-cli test test-unit test-integration test-docker test-all lint fmt clean clean-all deps download-wintun help
 
 # Default target
-build:
+build: build-server build-cli
+
+build-server:
+	@echo "Building VPN server..."
 	go build -o bin/server$(shell go env GOEXE) ./cmd/server
+
+build-cli:
+	@echo "Building VPN CLI..."
 	go build -o bin/vpn-cli$(shell go env GOEXE) ./cmd/vpn-cli
 
 # Cross-platform builds for releases
@@ -51,6 +57,12 @@ docker-build:
 	@echo "Building Docker image for testing..."
 	docker build -t go-vpn:latest .
 
+# Dependencies management
+deps:
+	@echo "Verifying Go dependencies..."
+	go mod download
+	go mod tidy
+
 lint:
 	@if command -v golangci-lint >/dev/null 2>&1; then \
 		golangci-lint run; \
@@ -63,9 +75,9 @@ fmt:
 
 clean:
 ifeq ($(OS),Windows_NT)
-	@if exist bin rmdir /s /q bin 2>nul || echo.
-	@if exist coverage.out del coverage.out 2>nul || echo.
-	@if exist coverage.html del coverage.html 2>nul || echo.
+	@if exist bin rmdir /s /q bin 2>nul || true
+	@if exist coverage.out del coverage.out 2>nul || true
+	@if exist coverage.html del coverage.html 2>nul || true
 else
 	rm -rf bin/
 	rm -f coverage.out coverage.html
@@ -73,7 +85,7 @@ endif
 
 clean-all: clean
 ifeq ($(OS),Windows_NT)
-	@if exist lib rmdir /s /q lib 2>nul || echo.
+	@if exist lib rmdir /s /q lib 2>nul || true
 else
 	rm -rf lib/
 endif
@@ -105,6 +117,8 @@ download-wintun:
 help:
 	@echo "Available targets:"
 	@echo "  build             - Build server and CLI"
+	@echo "  build-server      - Build VPN server only"
+	@echo "  build-cli         - Build CLI client only"
 	@echo "  build-all         - Cross-platform builds"
 	@echo ""
 	@echo "Test stages (aligned with CI):"
@@ -115,6 +129,7 @@ help:
 	@echo "  test-all          - Run all test stages"
 	@echo ""
 	@echo "Other:"
+	@echo "  deps              - Verify and download dependencies"
 	@echo "  lint              - Run linter"
 	@echo "  fmt               - Format code"
 	@echo "  clean             - Clean build artifacts"

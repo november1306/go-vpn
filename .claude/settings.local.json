@@ -3,7 +3,10 @@
     "allow": [
       "Bash(rm:*)",
       "Bash(mv:*)",
-      "Bash(go test:*)"
+      "Bash(go test:*)",
+      "Bash(make download-wintun:*)",
+      "Bash(make:*)",
+      "Bash(gh pr view:*)"
     ],
     "deny": []
   }

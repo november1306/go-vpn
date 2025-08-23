@@ -17,11 +17,11 @@ func TestGenerateKeyPair(t *testing.T) {
 		// We can't easily mock crypto/rand.Read, so we test the error handling exists
 		// by verifying the error message format in our code
 		// This test validates our error wrapping logic
-		
+
 		// The function should wrap crypto errors properly
 		// We can't trigger a crypto failure easily, so we verify the error handling exists
 		// by checking that the function completes (crypto/rand works in test environment)
-		
+
 		_, _, err := GenerateKeyPair()
 		if err != nil && !strings.Contains(err.Error(), "failed to generate private key") {
 			t.Errorf("Expected our error message format, got: %v", err)
@@ -55,11 +55,11 @@ func TestWireGuardDevice_Start(t *testing.T) {
 	t.Run("returns error for nil device", func(t *testing.T) {
 		device := &WireGuardDevice{}
 		err := device.Start()
-		
+
 		if err == nil {
 			t.Error("Start should return error for uninitialized device")
 		}
-		
+
 		expectedMsg := "device not initialized"
 		if err.Error() != expectedMsg {
 			t.Errorf("Expected '%s', got: %v", expectedMsg, err)
@@ -71,20 +71,20 @@ func TestWireGuardDevice_Stop(t *testing.T) {
 	t.Run("handles nil device gracefully", func(t *testing.T) {
 		device := &WireGuardDevice{}
 		err := device.Stop()
-		
+
 		// Our Stop method should handle nil gracefully and not return error
 		if err != nil {
 			t.Errorf("Stop should handle nil device gracefully, got: %v", err)
 		}
 	})
-	
+
 	t.Run("handles nil tun gracefully", func(t *testing.T) {
 		device := &WireGuardDevice{
 			device: nil,
 			tun:    nil,
 		}
 		err := device.Stop()
-		
+
 		// Should not panic or error when both device and tun are nil
 		if err != nil {
 			t.Errorf("Stop should handle nil tun gracefully, got: %v", err)
@@ -96,7 +96,7 @@ func TestBasicDeviceDemo(t *testing.T) {
 	t.Run("completes without panic", func(t *testing.T) {
 		// Test that our demo function runs to completion
 		err := BasicDeviceDemo()
-		
+
 		// Demo should complete without panicking
 		// It may return an error, but that's handled within the demo
 		// The important part is our demo logic executes properly

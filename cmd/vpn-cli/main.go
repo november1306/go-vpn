@@ -7,9 +7,9 @@ import (
 	"net/http"
 	"os"
 
-	"github.com/spf13/cobra"
 	"github.com/november1306/go-vpn/internal/version"
 	"github.com/november1306/go-vpn/internal/wireguard/keys"
+	"github.com/spf13/cobra"
 )
 
 var rootCmd = &cobra.Command{

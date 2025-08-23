@@ -16,7 +16,7 @@ import (
 func init() {
 	// Initialize test configuration
 	cfg = config.Load()
-	
+
 	// Initialize VPN server for testing (will fail on Windows but handlers still work)
 	vpnServer = vpnserver.NewUserspaceVPNServer()
 }
@@ -32,7 +32,7 @@ func TestHandleRegister(t *testing.T) {
 		reqBody := RegisterRequest{
 			ClientPublicKey: clientPubKey,
 		}
-		
+
 		jsonData, err := json.Marshal(reqBody)
 		if err != nil {
 			t.Fatalf("Failed to marshal request: %v", err)
@@ -40,7 +40,7 @@ func TestHandleRegister(t *testing.T) {
 
 		req := httptest.NewRequest(http.MethodPost, "/api/register", bytes.NewBuffer(jsonData))
 		req.Header.Set("Content-Type", "application/json")
-		
+
 		rr := httptest.NewRecorder()
 		handleRegister(rr, req)
 
@@ -62,7 +62,7 @@ func TestHandleRegister(t *testing.T) {
 	t.Run("invalid method", func(t *testing.T) {
 		req := httptest.NewRequest(http.MethodGet, "/api/register", nil)
 		rr := httptest.NewRecorder()
-		
+
 		handleRegister(rr, req)
 
 		if rr.Code != http.StatusMethodNotAllowed {
@@ -88,7 +88,7 @@ func TestHandleRegister(t *testing.T) {
 	t.Run("invalid JSON", func(t *testing.T) {
 		req := httptest.NewRequest(http.MethodPost, "/api/register", strings.NewReader("invalid json"))
 		req.Header.Set("Content-Type", "application/json")
-		
+
 		rr := httptest.NewRecorder()
 		handleRegister(rr, req)
 
@@ -110,11 +110,11 @@ func TestHandleRegister(t *testing.T) {
 		reqBody := RegisterRequest{
 			ClientPublicKey: "",
 		}
-		
+
 		jsonData, _ := json.Marshal(reqBody)
 		req := httptest.NewRequest(http.MethodPost, "/api/register", bytes.NewBuffer(jsonData))
 		req.Header.Set("Content-Type", "application/json")
-		
+
 		rr := httptest.NewRecorder()
 		handleRegister(rr, req)
 
@@ -136,11 +136,11 @@ func TestHandleRegister(t *testing.T) {
 		reqBody := RegisterRequest{
 			ClientPublicKey: "invalid-key-format",
 		}
-		
+
 		jsonData, _ := json.Marshal(reqBody)
 		req := httptest.NewRequest(http.MethodPost, "/api/register", bytes.NewBuffer(jsonData))
 		req.Header.Set("Content-Type", "application/json")
-		
+
 		rr := httptest.NewRecorder()
 		handleRegister(rr, req)
 

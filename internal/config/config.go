@@ -9,10 +9,10 @@ import (
 
 // Config holds all application configuration
 type Config struct {
-	Server   ServerConfig   `json:"server"`
-	Network  NetworkConfig  `json:"network"`
-	Timeouts TimeoutConfig  `json:"timeouts"`
-	Test     TestConfig     `json:"test"`
+	Server   ServerConfig  `json:"server"`
+	Network  NetworkConfig `json:"network"`
+	Timeouts TimeoutConfig `json:"timeouts"`
+	Test     TestConfig    `json:"test"`
 }
 
 // ServerConfig contains HTTP server settings
@@ -32,11 +32,11 @@ type NetworkConfig struct {
 
 // TimeoutConfig contains timeout settings
 type TimeoutConfig struct {
-	HTTPRead     time.Duration `json:"httpRead"`     // HTTP read timeout (default: 15s)
-	HTTPWrite    time.Duration `json:"httpWrite"`    // HTTP write timeout (default: 15s)
-	HTTPIdle     time.Duration `json:"httpIdle"`     // HTTP idle timeout (default: 60s)
-	Shutdown     time.Duration `json:"shutdown"`     // Graceful shutdown timeout (default: 10s)
-	TestContext  time.Duration `json:"testContext"`  // Test context timeout (default: 30s)
+	HTTPRead    time.Duration `json:"httpRead"`    // HTTP read timeout (default: 15s)
+	HTTPWrite   time.Duration `json:"httpWrite"`   // HTTP write timeout (default: 15s)
+	HTTPIdle    time.Duration `json:"httpIdle"`    // HTTP idle timeout (default: 60s)
+	Shutdown    time.Duration `json:"shutdown"`    // Graceful shutdown timeout (default: 10s)
+	TestContext time.Duration `json:"testContext"` // Test context timeout (default: 30s)
 }
 
 // TestConfig contains test-specific settings
@@ -84,12 +84,12 @@ func (c *Config) Validate() error {
 	if c.Server.VPNPort <= 0 || c.Server.VPNPort > 65535 {
 		return fmt.Errorf("invalid VPN port: %d", c.Server.VPNPort)
 	}
-	
+
 	// Validate interface names
 	if c.Server.InterfaceName == "" {
 		return fmt.Errorf("interface name cannot be empty")
 	}
-	
+
 	// Validate network settings
 	if c.Network.ServerIP == "" {
 		return fmt.Errorf("server IP cannot be empty")
@@ -100,7 +100,7 @@ func (c *Config) Validate() error {
 	if c.Network.IPAMGateway == "" {
 		return fmt.Errorf("IPAM gateway cannot be empty")
 	}
-	
+
 	// Validate timeouts
 	if c.Timeouts.HTTPRead <= 0 {
 		return fmt.Errorf("HTTP read timeout must be positive")
@@ -111,7 +111,7 @@ func (c *Config) Validate() error {
 	if c.Timeouts.Shutdown <= 0 {
 		return fmt.Errorf("shutdown timeout must be positive")
 	}
-	
+
 	return nil
 }
 

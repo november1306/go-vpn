@@ -18,14 +18,14 @@ type PeerInfo struct {
 type ServerConfig struct {
 	// Interface name (e.g., "wg0")
 	InterfaceName string
-	
+
 	// Server private key (base64 encoded)
 	// SECURITY: This should be handled securely - not logged or exposed
 	PrivateKey string
-	
+
 	// Listen port for WireGuard UDP traffic
 	ListenPort int
-	
+
 	// Server IP within the VPN network (e.g., "10.0.0.1/24")
 	ServerIP string
 }
@@ -36,21 +36,21 @@ type ServerConfig struct {
 type WireGuardBackend interface {
 	// Start initializes and starts the WireGuard device with the given configuration
 	Start(ctx context.Context, config ServerConfig) error
-	
+
 	// Stop gracefully shuts down the WireGuard device
 	Stop(ctx context.Context) error
-	
+
 	// AddPeer adds a new peer to the WireGuard device
 	// publicKey: base64-encoded peer public key
 	// allowedIPs: CIDR blocks that the peer is allowed to send traffic for
 	AddPeer(publicKey string, allowedIPs []string) error
-	
+
 	// RemovePeer removes a peer from the WireGuard device
 	RemovePeer(publicKey string) error
-	
+
 	// GetPeers returns information about all connected peers
 	GetPeers() ([]PeerInfo, error)
-	
+
 	// IsRunning returns whether the backend is currently running
 	IsRunning() bool
 }
