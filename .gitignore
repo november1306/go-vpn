@@ -1,4 +1,5 @@
 bin/
+lib/
 coverage/
 coverage.out
 coverage.html
