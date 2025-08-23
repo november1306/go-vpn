@@ -7,10 +7,23 @@ build: build-server build-cli
 
 build-server:
 	@echo "Building VPN server..."
+ifeq ($(OS),Windows_NT)
+	@if not exist bin mkdir bin
+else
+	@mkdir -p bin
+endif
 	go build -o bin/server$(shell go env GOEXE) ./cmd/server
+ifeq ($(OS),Windows_NT)
+	@if exist lib\amd64\wintun.dll copy lib\amd64\wintun.dll bin\wintun.dll >nul 2>&1 || echo "WinTUN DLL not found - run 'make download-wintun' first"
+endif
 
 build-cli:
 	@echo "Building VPN CLI..."
+ifeq ($(OS),Windows_NT)
+	@if not exist bin mkdir bin
+else
+	@mkdir -p bin
+endif
 	go build -o bin/vpn-cli$(shell go env GOEXE) ./cmd/vpn-cli
 
 # Cross-platform builds for releases
@@ -90,29 +103,15 @@ else
 	rm -rf lib/
 endif
 
-# Download WinTun DLLs for Windows support
+# Download WinTun DLLs for Windows support (cross-platform)
 download-wintun:
-	@echo "Downloading WinTun DLLs..."
-	@mkdir -p lib/amd64 lib/arm64 lib/arm lib/x86
-	@if command -v curl >/dev/null 2>&1; then \
-		curl -L https://www.wintun.net/builds/wintun-0.14.1.zip -o wintun.zip; \
-	elif command -v wget >/dev/null 2>&1; then \
-		wget -O wintun.zip https://www.wintun.net/builds/wintun-0.14.1.zip; \
-	else \
-		echo "Error: Neither curl nor wget found. Please install one to download WinTun."; \
-		exit 1; \
-	fi
-	@if command -v unzip >/dev/null 2>&1; then \
-		unzip -j wintun.zip "wintun/bin/amd64/wintun.dll" -d lib/amd64/; \
-		unzip -j wintun.zip "wintun/bin/arm64/wintun.dll" -d lib/arm64/; \
-		unzip -j wintun.zip "wintun/bin/arm/wintun.dll" -d lib/arm/; \
-		unzip -j wintun.zip "wintun/bin/x86/wintun.dll" -d lib/x86/; \
-	else \
-		echo "Error: unzip not found. Please install unzip to extract WinTun DLLs."; \
-		exit 1; \
-	fi
-	@rm -f wintun.zip
-	@echo "WinTun DLLs downloaded successfully to lib/ directories"
+	go run scripts/download-wintun.go
+ifeq ($(OS),Windows_NT)
+	@echo "Copying WinTUN DLL to bin directory..."
+	@if not exist bin mkdir bin
+	@copy lib\amd64\wintun.dll bin\wintun.dll >nul
+	@echo "WinTUN DLL copied to bin/wintun.dll"
+endif
 
 help:
 	@echo "Available targets:"

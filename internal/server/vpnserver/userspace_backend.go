@@ -2,6 +2,8 @@ package vpnserver
 
 import (
 	"context"
+	"encoding/base64"
+	"encoding/hex"
 	"fmt"
 	"log/slog"
 	"sync"
@@ -43,9 +45,13 @@ func (ub *UserspaceBackend) Start(ctx context.Context, config ServerConfig) erro
 		return fmt.Errorf("failed to create WireGuard device: %w", err)
 	}
 
+	// Set device before configuring so IPC calls work
+	ub.device = device
+
 	// Configure the device with server settings
 	if err := ub.configureDevice(device, config); err != nil {
 		device.Stop() // Clean up on error
+		ub.device = nil // Reset on error
 		return fmt.Errorf("failed to configure device: %w", err)
 	}
 
@@ -187,10 +193,16 @@ func (ub *UserspaceBackend) IsRunning() bool {
 
 // configureDevice configures the WireGuard device with server settings
 func (ub *UserspaceBackend) configureDevice(wgDevice *wireguard.WireGuardDevice, config ServerConfig) error {
+	// Convert base64 private key to hex for WireGuard IPC
+	hexPrivateKey, err := ub.base64ToHex(config.PrivateKey)
+	if err != nil {
+		return fmt.Errorf("invalid private key format: %w", err)
+	}
+
 	// Build IPC configuration for server setup
-	// Format: private_key=<key>\nlisten_port=<port>\n
+	// Format: private_key=<hex_key>\nlisten_port=<port>\n
 	// Note: Private key is passed directly to WireGuard IPC, not logged
-	ipcConfig := fmt.Sprintf("private_key=%s\nlisten_port=%d\n", config.PrivateKey, config.ListenPort)
+	ipcConfig := fmt.Sprintf("private_key=%s\nlisten_port=%d\n", hexPrivateKey, config.ListenPort)
 
 	return ub.applyIPCConfig(ipcConfig)
 }
@@ -204,4 +216,18 @@ func (ub *UserspaceBackend) applyIPCConfig(config string) error {
 	// SECURITY: Do not log IPC config as it contains private key material
 	// Use the exposed IPC method from our WireGuardDevice wrapper
 	return ub.device.IpcSet(config)
+}
+
+// base64ToHex converts a base64-encoded key to hex format for WireGuard IPC
+func (ub *UserspaceBackend) base64ToHex(base64Key string) (string, error) {
+	keyBytes, err := base64.StdEncoding.DecodeString(base64Key)
+	if err != nil {
+		return "", fmt.Errorf("failed to decode base64 key: %w", err)
+	}
+
+	if len(keyBytes) != 32 {
+		return "", fmt.Errorf("key must be 32 bytes, got %d", len(keyBytes))
+	}
+
+	return hex.EncodeToString(keyBytes), nil
 }

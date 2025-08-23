@@ -1,5 +1,6 @@
 bin/
 lib/
+temp/
 coverage/
 coverage.out
 coverage.html
