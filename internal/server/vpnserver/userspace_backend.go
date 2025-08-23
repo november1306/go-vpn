@@ -50,7 +50,7 @@ func (ub *UserspaceBackend) Start(ctx context.Context, config ServerConfig) erro
 
 	// Configure the device with server settings
 	if err := ub.configureDevice(device, config); err != nil {
-		device.Stop() // Clean up on error
+		device.Stop()   // Clean up on error
 		ub.device = nil // Reset on error
 		return fmt.Errorf("failed to configure device: %w", err)
 	}
