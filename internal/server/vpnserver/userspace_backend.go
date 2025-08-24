@@ -49,7 +49,7 @@ func (ub *UserspaceBackend) Start(ctx context.Context, config ServerConfig) erro
 	ub.device = device
 
 	// Configure the device with server settings
-	if err := ub.configureDevice(device, config); err != nil {
+	if err := ub.configureDevice(config); err != nil {
 		device.Stop()   // Clean up on error
 		ub.device = nil // Reset on error
 		return fmt.Errorf("failed to configure device: %w", err)
@@ -106,10 +106,15 @@ func (ub *UserspaceBackend) AddPeer(publicKey string, allowedIPs []string) error
 
 	slog.Info("Adding peer to userspace backend", "allowedIPs", allowedIPs)
 
-	// Build IPC configuration string to add peer
-	// Format: set=1\npublic_key=<key>\nallowed_ip=<ip1>\nallowed_ip=<ip2>\n
-	config := "set=1\n"
-	config += fmt.Sprintf("public_key=%s\n", publicKey)
+	// Convert base64 public key to hex for WireGuard IPC
+	hexPublicKey, err := ub.base64ToHex(publicKey)
+	if err != nil {
+		return fmt.Errorf("invalid public key format: %w", err)
+	}
+
+	// Build IPC configuration string to add peer  
+	// WireGuard UAPI format: public_key=<hex_key>\nallowed_ip=<ip>\n\n
+	config := fmt.Sprintf("public_key=%s\n", hexPublicKey)
 
 	for _, ip := range allowedIPs {
 		config += fmt.Sprintf("allowed_ip=%s\n", ip)
@@ -139,9 +144,14 @@ func (ub *UserspaceBackend) RemovePeer(publicKey string) error {
 
 	slog.Info("Removing peer from userspace backend")
 
+	// Convert base64 public key to hex for WireGuard IPC
+	hexPublicKey, err := ub.base64ToHex(publicKey)
+	if err != nil {
+		return fmt.Errorf("invalid public key format: %w", err)
+	}
+
 	// Build IPC configuration string to remove peer
-	config := "set=1\n"
-	config += fmt.Sprintf("public_key=%s\n", publicKey)
+	config := fmt.Sprintf("public_key=%s\n", hexPublicKey)
 	config += "remove=true\n\n"
 
 	// Apply configuration via IPC
@@ -192,7 +202,7 @@ func (ub *UserspaceBackend) IsRunning() bool {
 }
 
 // configureDevice configures the WireGuard device with server settings
-func (ub *UserspaceBackend) configureDevice(wgDevice *wireguard.WireGuardDevice, config ServerConfig) error {
+func (ub *UserspaceBackend) configureDevice(config ServerConfig) error {
 	// Convert base64 private key to hex for WireGuard IPC
 	hexPrivateKey, err := ub.base64ToHex(config.PrivateKey)
 	if err != nil {
@@ -200,9 +210,9 @@ func (ub *UserspaceBackend) configureDevice(wgDevice *wireguard.WireGuardDevice,
 	}
 
 	// Build IPC configuration for server setup
-	// Format: private_key=<hex_key>\nlisten_port=<port>\n
+	// UAPI format: private_key=<hex_key>\nlisten_port=<port>\n\n
 	// Note: Private key is passed directly to WireGuard IPC, not logged
-	ipcConfig := fmt.Sprintf("private_key=%s\nlisten_port=%d\n", hexPrivateKey, config.ListenPort)
+	ipcConfig := fmt.Sprintf("private_key=%s\nlisten_port=%d\n\n", hexPrivateKey, config.ListenPort)
 
 	return ub.applyIPCConfig(ipcConfig)
 }

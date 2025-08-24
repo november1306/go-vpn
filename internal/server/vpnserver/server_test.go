@@ -230,10 +230,16 @@ func TestVPNServerErrorCases(t *testing.T) {
 			t.Error("Expected error with empty config")
 		}
 
+		// Generate valid key for invalid port test
+		testPrivKey, _, err := keys.GenerateKeyPair()
+		if err != nil {
+			t.Fatalf("Failed to generate test key: %v", err)
+		}
+
 		// Test with invalid port
 		err = server.Start(ctx, ServerConfig{
 			InterfaceName: "wg0",
-			PrivateKey:    "test-key",
+			PrivateKey:    testPrivKey,
 			ListenPort:    -1,
 			ServerIP:      "10.0.0.1/24",
 		})
@@ -243,13 +249,19 @@ func TestVPNServerErrorCases(t *testing.T) {
 	})
 
 	t.Run("OperationsOnStoppedServer", func(t *testing.T) {
+		// Generate valid test keys
+		_, testPubKey, err := keys.GenerateKeyPair()
+		if err != nil {
+			t.Fatalf("Failed to generate test key: %v", err)
+		}
+
 		// Try operations on stopped server
-		err := server.AddClient("test-key", "10.0.0.2")
+		err = server.AddClient(testPubKey, "10.0.0.2")
 		if err == nil {
 			t.Error("Expected error adding client to stopped server")
 		}
 
-		err = server.RemoveClient("test-key")
+		err = server.RemoveClient(testPubKey)
 		if err == nil {
 			t.Error("Expected error removing client from stopped server")
 		}

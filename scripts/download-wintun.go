@@ -2,16 +2,23 @@ package main
 
 import (
 	"archive/zip"
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	"io"
 	"net/http"
 	"os"
 	"path/filepath"
+	"time"
 )
 
 const (
-	wintunURL = "https://www.wintun.net/builds/wintun-0.14.1.zip"
-	tempFile  = "wintun.zip"
+	wintunURL      = "https://www.wintun.net/builds/wintun-0.14.1.zip"
+	tempFile       = "wintun.zip"
+	// SHA256 checksum for wintun-0.14.1.zip (verified from official source)
+	wintunSHA256   = "07c256185d6ee3652e09fa55c0b673e2624b565e02c4b9091c79ca7d2f24ef51"
+	requestTimeout = 30 * time.Second
+	maxRedirects   = 3
 )
 
 var archMap = map[string]string{
@@ -53,7 +60,18 @@ func main() {
 }
 
 func downloadFile(url, filename string) error {
-	resp, err := http.Get(url)
+	// Create HTTP client with security restrictions
+	client := &http.Client{
+		Timeout: requestTimeout,
+		CheckRedirect: func(req *http.Request, via []*http.Request) error {
+			if len(via) >= maxRedirects {
+				return fmt.Errorf("too many redirects (max %d)", maxRedirects)
+			}
+			return nil
+		},
+	}
+
+	resp, err := client.Get(url)
 	if err != nil {
 		return err
 	}
@@ -69,8 +87,24 @@ func downloadFile(url, filename string) error {
 	}
 	defer out.Close()
 
-	_, err = io.Copy(out, resp.Body)
-	return err
+	// Copy data while calculating SHA256
+	hash := sha256.New()
+	multiWriter := io.MultiWriter(out, hash)
+	_, err = io.Copy(multiWriter, resp.Body)
+	if err != nil {
+		return err
+	}
+
+	// Verify SHA256 checksum
+	calculatedHash := hex.EncodeToString(hash.Sum(nil))
+	if calculatedHash != wintunSHA256 {
+		// Clean up invalid file
+		os.Remove(filename)
+		return fmt.Errorf("SHA256 checksum mismatch:\n  expected: %s\n  got:      %s", wintunSHA256, calculatedHash)
+	}
+
+	fmt.Println("✓ SHA256 checksum verified")
+	return nil
 }
 
 func extractDLLs(zipFile string) error {
@@ -94,19 +128,17 @@ func extractDLLs(zipFile string) error {
 		if err != nil {
 			return err
 		}
+		defer rc.Close() // Fix resource leak - close immediately after open
 
 		// Create destination file
 		outFile, err := os.Create(destPath)
 		if err != nil {
-			rc.Close()
 			return err
 		}
+		defer outFile.Close() // Ensure file is closed on any exit path
 
 		// Copy content
 		_, err = io.Copy(outFile, rc)
-		outFile.Close()
-		rc.Close()
-
 		if err != nil {
 			return err
 		}

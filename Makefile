@@ -7,24 +7,14 @@ build: build-server build-cli
 
 build-server:
 	@echo "Building VPN server..."
-ifeq ($(OS),Windows_NT)
-	@if not exist bin mkdir bin
-else
-	@mkdir -p bin
-endif
-	go build -o bin/server$(shell go env GOEXE) ./cmd/server
+	@go build -o bin/server$(shell go env GOEXE) ./cmd/server
 ifeq ($(OS),Windows_NT)
 	@if exist lib\amd64\wintun.dll copy lib\amd64\wintun.dll bin\wintun.dll >nul 2>&1 || echo "WinTUN DLL not found - run 'make download-wintun' first"
 endif
 
 build-cli:
 	@echo "Building VPN CLI..."
-ifeq ($(OS),Windows_NT)
-	@if not exist bin mkdir bin
-else
-	@mkdir -p bin
-endif
-	go build -o bin/vpn-cli$(shell go env GOEXE) ./cmd/vpn-cli
+	@go build -o bin/vpn-cli$(shell go env GOEXE) ./cmd/vpn-cli
 
 # Cross-platform builds for releases
 build-all:
