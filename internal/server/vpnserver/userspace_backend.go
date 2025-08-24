@@ -112,7 +112,7 @@ func (ub *UserspaceBackend) AddPeer(publicKey string, allowedIPs []string) error
 		return fmt.Errorf("invalid public key format: %w", err)
 	}
 
-	// Build IPC configuration string to add peer  
+	// Build IPC configuration string to add peer
 	// WireGuard UAPI format: public_key=<hex_key>\nallowed_ip=<ip>\n\n
 	config := fmt.Sprintf("public_key=%s\n", hexPublicKey)
 

@@ -40,7 +40,7 @@ type StatusResponse struct {
 func TestVPNServerClientIntegration(t *testing.T) {
 	// Skip on systems without TUN support
 	server := NewUserspaceVPNServer()
-	
+
 	// Generate server keys
 	serverPrivKey, serverPubKey, err := keys.GenerateKeyPair()
 	if err != nil {
@@ -174,7 +174,7 @@ func TestVPNServerClientIntegration(t *testing.T) {
 		// Verify each client has correct configuration
 		clientKeys := map[string]string{
 			client1PubKey: "10.98.0.10/32",
-			client2PubKey: "10.98.0.11/32", 
+			client2PubKey: "10.98.0.11/32",
 			client3PubKey: "10.98.0.12/32",
 		}
 
@@ -186,7 +186,7 @@ func TestVPNServerClientIntegration(t *testing.T) {
 			}
 
 			if len(peer.AllowedIPs) != 1 || peer.AllowedIPs[0] != expectedIP {
-				t.Errorf("Peer %s: expected allowed IPs [%s], got %v", 
+				t.Errorf("Peer %s: expected allowed IPs [%s], got %v",
 					peer.PublicKey[:8], expectedIP, peer.AllowedIPs)
 			}
 		}
@@ -232,7 +232,7 @@ func TestHTTPAPIIntegration(t *testing.T) {
 
 	// Create server instance
 	server := NewUserspaceVPNServer()
-	
+
 	config := ServerConfig{
 		InterfaceName: "wg-test-http",
 		PrivateKey:    serverPrivKey,
@@ -422,7 +422,7 @@ func TestHTTPAPIIntegration(t *testing.T) {
 		req.Header.Set("Content-Type", "application/json")
 		w := httptest.NewRecorder()
 		handleRegister(w, req)
-		
+
 		if w.Code != http.StatusBadRequest {
 			t.Errorf("Expected status 400 for invalid JSON, got %d", w.Code)
 		}
@@ -434,7 +434,7 @@ func TestHTTPAPIIntegration(t *testing.T) {
 		req.Header.Set("Content-Type", "application/json")
 		w = httptest.NewRecorder()
 		handleRegister(w, req)
-		
+
 		if w.Code != http.StatusBadRequest {
 			t.Errorf("Expected status 400 for missing public key, got %d", w.Code)
 		}
@@ -446,7 +446,7 @@ func TestHTTPAPIIntegration(t *testing.T) {
 		req.Header.Set("Content-Type", "application/json")
 		w = httptest.NewRecorder()
 		handleRegister(w, req)
-		
+
 		if w.Code != http.StatusBadRequest {
 			t.Errorf("Expected status 400 for invalid key format, got %d", w.Code)
 		}

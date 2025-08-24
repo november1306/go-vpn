@@ -90,7 +90,7 @@ func TestClientServerKeyExchange(t *testing.T) {
 			t.Fatalf("Failed to generate server keys: %v", err)
 		}
 		timestamp := time.Now().UTC().Format(time.RFC3339)
-		
+
 		respBody := RegisterResponse{
 			ServerPublicKey: serverPubKey,
 			ServerEndpoint:  ":51820",

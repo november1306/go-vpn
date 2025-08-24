@@ -61,7 +61,7 @@ func TestUserspaceBackend_base64ToHex(t *testing.T) {
 	t.Run("wrong key length", func(t *testing.T) {
 		// Create a 16-byte key instead of 32
 		shortKey := base64.StdEncoding.EncodeToString(make([]byte, 16))
-		
+
 		_, err := backend.base64ToHex(shortKey)
 		if err == nil {
 			t.Error("Expected error for wrong key length")
@@ -150,18 +150,18 @@ func TestDeviceInitializationOrder(t *testing.T) {
 		// This test validates the fix for the race condition bug
 		// The issue was: ub.device was nil when configureDevice() tried to call IPC
 		backend := NewUserspaceBackend()
-		
+
 		// Verify initial state
 		if backend.device != nil {
 			t.Error("Backend device should be nil initially")
 		}
-		
+
 		// Test that the device field exists and can be set
 		// (This validates our fix where we set ub.device = device before configureDevice)
 		if backend.peers == nil {
 			t.Error("Backend peers map should be initialized")
 		}
-		
+
 		// Verify the backend has the base64ToHex method that configureDevice depends on
 		testKey := "dGVzdC1rZXktMzItYnl0ZXMtZXhhY3RseS0hISEh" // "test-key-32-bytes-exactly-!!!"
 		_, err := backend.base64ToHex(testKey)
@@ -174,7 +174,7 @@ func TestDeviceInitializationOrder(t *testing.T) {
 func TestWireGuardIPCFormat(t *testing.T) {
 	t.Run("IPC configuration format", func(t *testing.T) {
 		backend := NewUserspaceBackend()
-		
+
 		// Generate test keys
 		_, clientPubKey, err := keys.GenerateKeyPair()
 		if err != nil {
@@ -189,7 +189,7 @@ func TestWireGuardIPCFormat(t *testing.T) {
 
 		// Test the ACTUAL IPC format that we use (without set=1 which caused errors)
 		allowedIPs := []string{"10.0.0.2/32"}
-		
+
 		// This matches the actual format in userspace_backend.go:117-122
 		config := "public_key=" + hexPubKey + "\n"
 		for _, ip := range allowedIPs {
@@ -207,7 +207,7 @@ func TestWireGuardIPCFormat(t *testing.T) {
 		if !contains(config, "\n\n") {
 			t.Error("IPC config should end with double newline")
 		}
-		
+
 		// Verify it does NOT contain the broken set=1 command that caused IPC errors
 		if contains(config, "set=1") {
 			t.Error("IPC config should NOT contain 'set=1' command - this causes IPC errors")
@@ -222,9 +222,9 @@ func TestWireGuardIPCFormat(t *testing.T) {
 
 // Helper function to check if string contains substring
 func contains(s, substr string) bool {
-	return len(s) >= len(substr) && (s == substr || (len(s) > len(substr) && 
-		(s[:len(substr)] == substr || s[len(s)-len(substr):] == substr || 
-		indexOf(s, substr) >= 0)))
+	return len(s) >= len(substr) && (s == substr || (len(s) > len(substr) &&
+		(s[:len(substr)] == substr || s[len(s)-len(substr):] == substr ||
+			indexOf(s, substr) >= 0)))
 }
 
 // Simple indexOf implementation

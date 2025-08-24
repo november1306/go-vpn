@@ -13,8 +13,8 @@ import (
 )
 
 const (
-	wintunURL      = "https://www.wintun.net/builds/wintun-0.14.1.zip"
-	tempFile       = "wintun.zip"
+	wintunURL = "https://www.wintun.net/builds/wintun-0.14.1.zip"
+	tempFile  = "wintun.zip"
 	// SHA256 checksum for wintun-0.14.1.zip (verified from official source)
 	wintunSHA256   = "07c256185d6ee3652e09fa55c0b673e2624b565e02c4b9091c79ca7d2f24ef51"
 	requestTimeout = 30 * time.Second
