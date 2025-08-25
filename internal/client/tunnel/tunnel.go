@@ -5,9 +5,11 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"fmt"
+	"net"
 	"os"
 	"os/exec"
 	"runtime"
+	"strconv"
 	"strings"
 	"time"
 
@@ -419,26 +421,23 @@ func (tm *TunnelManager) configureWindowsVPNRouting() error {
 func (tm *TunnelManager) configureFullTrafficRouting() error {
 	fmt.Println("🌐 Configuring full traffic routing through VPN...")
 
-	// Get current default gateway
-	cmd := exec.Command("route", "print", "0.0.0.0")
-	output, err := cmd.CombinedOutput()
-	if err != nil {
-		return fmt.Errorf("failed to get current routing table: %w", err)
-	}
-
-	fmt.Printf("Current routing table:\n%s\n", string(output))
-
 	// Add basic VPN subnet routing to allow communication with VPN server
 	fmt.Println("⚠️  Configuring basic VPN subnet routing (10.0.0.0/24)...")
 
-	// Add route for VPN subnet through the TUN interface
-	// This allows pinging 10.0.0.1 (server) through the VPN tunnel
-	routeCmd := exec.Command("route", "add", "10.0.0.0", "mask", "255.255.255.0", "10.0.0.100", "metric", "1")
+	// Get TUN interface information
+	tunInterfaceIndex, err := tm.getTunInterfaceIndex()
+	if err != nil {
+		return fmt.Errorf("failed to get TUN interface index: %w", err)
+	}
+
+	// Add route for VPN subnet through the specific TUN interface
+	// Use interface index to ensure traffic goes through the WireGuard tunnel
+	routeCmd := exec.Command("route", "add", "10.0.0.0", "mask", "255.255.255.0", "0.0.0.0", "if", strconv.Itoa(tunInterfaceIndex), "metric", "1")
 	if err := routeCmd.Run(); err != nil {
 		fmt.Printf("⚠️  Failed to add VPN subnet route: %v\n", err)
 		fmt.Println("   You may need to run as administrator")
 	} else {
-		fmt.Println("✅ VPN subnet routing configured (10.0.0.0/24)")
+		fmt.Printf("✅ VPN subnet routing configured (10.0.0.0/24) through interface %d\n", tunInterfaceIndex)
 	}
 
 	fmt.Println()
@@ -452,7 +451,7 @@ func (tm *TunnelManager) configureFullTrafficRouting() error {
 // cleanupRouting removes VPN routes added during connection
 func (tm *TunnelManager) cleanupRouting() {
 	fmt.Println("🧹 Cleaning up VPN routes...")
-	
+
 	// Remove the VPN subnet route we added
 	routeCmd := exec.Command("route", "delete", "10.0.0.0", "mask", "255.255.255.0")
 	if err := routeCmd.Run(); err != nil {
@@ -466,54 +465,70 @@ func (tm *TunnelManager) cleanupRouting() {
 // verifyConnection checks if the WireGuard handshake actually completed
 func (tm *TunnelManager) verifyConnection() bool {
 	fmt.Println("🔍 Verifying handshake completion...")
-	
+
 	// Wait a moment for handshake to potentially complete
 	time.Sleep(3 * time.Second)
-	
-	// Step 1: Check if server is reachable externally
-	fmt.Printf("   Testing external connectivity to %s...\n", strings.Split(tm.config.ServerEndpoint, ":")[0])
+
+	// Step 1: Check if server is reachable externally (only for remote servers)
 	serverIP := strings.Split(tm.config.ServerEndpoint, ":")[0]
-	
-	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
-	defer cancel()
-	pingCmd := exec.CommandContext(ctx, "ping", "-n", "1", "-w", "1000", serverIP)
-	pingOutput, pingErr := pingCmd.CombinedOutput()
-	
-	if pingErr != nil || strings.Contains(string(pingOutput), "Request timed out") {
-		fmt.Printf("❌ DIAGNOSIS: Cannot reach server externally - network/routing issue\n")
-		fmt.Printf("   Server %s is unreachable from your network\n", serverIP)
-		return false
+	if serverIP != "127.0.0.1" && serverIP != "localhost" {
+		fmt.Printf("   Testing external connectivity to %s...\n", serverIP)
+
+		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+		defer cancel()
+		pingCmd := exec.CommandContext(ctx, "ping", "-n", "1", "-w", "1000", serverIP)
+		pingOutput, pingErr := pingCmd.CombinedOutput()
+
+		if pingErr != nil || strings.Contains(string(pingOutput), "Request timed out") {
+			fmt.Printf("❌ DIAGNOSIS: Cannot reach server externally - network/routing issue\n")
+			fmt.Printf("   Server %s is unreachable from your network\n", serverIP)
+			return false
+		}
+		fmt.Printf("✅ External connectivity OK - server %s is reachable\n", serverIP)
 	}
-	fmt.Printf("✅ External connectivity OK - server %s is reachable\n", serverIP)
-	
-	// Step 2: Test VPN tunnel connectivity
+
+	// Step 2: Test VPN tunnel connectivity (most important test)
 	if tm.config.ServerVPNIP != "" {
 		fmt.Printf("   Testing VPN tunnel connectivity to %s...\n", tm.config.ServerVPNIP)
-		
+
 		ctx2, cancel2 := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel2()
-		
+
 		cmd := exec.CommandContext(ctx2, "ping", "-n", "2", "-w", "2000", tm.config.ServerVPNIP)
 		output, err := cmd.CombinedOutput()
-		
+
 		if err == nil && !strings.Contains(string(output), "Request timed out") {
-			fmt.Printf("✅ DIAGNOSIS: VPN handshake successful - tunnel is working!\n")
+			fmt.Printf("✅ DIAGNOSIS: VPN tunnel is working correctly!\n")
 			fmt.Printf("   Can reach server at %s through VPN tunnel\n", tm.config.ServerVPNIP)
 			return true
 		}
-		
-		// Step 3: Firewall diagnosis
-		fmt.Printf("❌ DIAGNOSIS: VPN handshake failed - likely Windows firewall blocking UDP\n")
-		fmt.Printf("   External ping works but VPN tunnel ping fails\n")
-		fmt.Printf("   This indicates WireGuard handshake responses are blocked\n")
-		fmt.Printf("\n🔧 FIREWALL FIX REQUIRED:\n")
-		fmt.Printf("   Run this in PowerShell as Administrator:\n")
-		fmt.Printf("   New-NetFirewallRule -DisplayName \"Go VPN\" -Direction Inbound -Protocol UDP -Action Allow -Program \"%s\"\n", 
-			getCurrentExecutablePath())
-		fmt.Printf("\n   Or manually: Windows Security > Firewall > Allow an app through firewall\n")
-		
+
+		// Step 3: Advanced diagnosis - check routing table
+		fmt.Printf("❌ DIAGNOSIS: VPN tunnel connectivity failed\n")
+		fmt.Printf("   Checking routing configuration...\n")
+
+		routeCmd := exec.Command("route", "print", "10.0.0.0")
+		routeOutput, routeErr := routeCmd.CombinedOutput()
+		if routeErr == nil {
+			fmt.Printf("   Current 10.0.0.0 routes:\n%s\n", string(routeOutput))
+
+			// Check if route goes through correct interface
+			if strings.Contains(string(routeOutput), "192.168.") && !strings.Contains(string(routeOutput), "wg") {
+				fmt.Printf("🔧 ROUTING ISSUE DETECTED:\n")
+				fmt.Printf("   VPN traffic is routing through your physical network interface\n")
+				fmt.Printf("   instead of the WireGuard tunnel interface.\n")
+				fmt.Printf("   This has been fixed in the current version.\n")
+				fmt.Printf("   Please reconnect the VPN to apply the fix.\n")
+			} else {
+				fmt.Printf("🔧 POSSIBLE CAUSES:\n")
+				fmt.Printf("   1. Windows firewall blocking UDP traffic\n")
+				fmt.Printf("   2. Network routing configuration issue\n")
+				fmt.Printf("   3. WireGuard handshake not completing\n")
+				fmt.Printf("\n   Try running as Administrator or check Windows firewall settings.\n")
+			}
+		}
 	}
-	
+
 	return false
 }
 
@@ -524,6 +539,56 @@ func getCurrentExecutablePath() string {
 		return "vpn-cli.exe"
 	}
 	return exe
+}
+
+// getTunInterfaceIndex gets the Windows interface index for the TUN device
+func (tm *TunnelManager) getTunInterfaceIndex() (int, error) {
+	// Get all network interfaces
+	interfaces, err := net.Interfaces()
+	if err != nil {
+		return 0, fmt.Errorf("failed to get network interfaces: %w", err)
+	}
+
+	// Look for WireGuard/TUN interface by name pattern
+	for _, iface := range interfaces {
+		// Look for WireGuard Tunnel interfaces (typical pattern on Windows)
+		if strings.Contains(strings.ToLower(iface.Name), "wireguard") ||
+			strings.Contains(strings.ToLower(iface.Name), "wg-go-vpn") ||
+			strings.Contains(strings.ToLower(iface.Name), "wintun") {
+			fmt.Printf("Found TUN interface: %s (index: %d)\n", iface.Name, iface.Index)
+			return iface.Index, nil
+		}
+	}
+
+	// If no interface found by name, look for the most recently created interface
+	// that matches typical TUN characteristics (this is a fallback)
+	var candidates []net.Interface
+	for _, iface := range interfaces {
+		// Skip loopback and inactive interfaces
+		if iface.Flags&net.FlagLoopback != 0 || iface.Flags&net.FlagUp == 0 {
+			continue
+		}
+
+		// Look for interfaces that might be TUN devices
+		// TUN interfaces typically have specific characteristics
+		if iface.MTU == 1420 { // Common WireGuard MTU
+			candidates = append(candidates, iface)
+		}
+	}
+
+	// If we found potential candidates, use the one with the highest index (most recent)
+	if len(candidates) > 0 {
+		bestCandidate := candidates[0]
+		for _, candidate := range candidates[1:] {
+			if candidate.Index > bestCandidate.Index {
+				bestCandidate = candidate
+			}
+		}
+		fmt.Printf("Found TUN interface candidate: %s (index: %d)\n", bestCandidate.Name, bestCandidate.Index)
+		return bestCandidate.Index, nil
+	}
+
+	return 0, fmt.Errorf("no WireGuard/TUN interface found - please ensure the WireGuard device is running")
 }
 
 // configureUnixVPNRouting configures Unix routing for VPN traffic
