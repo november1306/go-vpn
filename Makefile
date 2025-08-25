@@ -85,16 +85,23 @@ fmt:
 
 
 clean:
+	@echo "Cleaning build artifacts and VPN data..."
 ifeq ($(OS),Windows_NT)
 	@if exist bin rmdir /s /q bin 2>nul || true
 	@if exist coverage.out del coverage.out 2>nul || true
 	@if exist coverage.html del coverage.html 2>nul || true
+	@if exist data rmdir /s /q data 2>nul || true
+	@if exist %USERPROFILE%\.go-wire-vpn rmdir /s /q "%USERPROFILE%\.go-wire-vpn" 2>nul || true
 else
 	rm -rf bin/
 	rm -f coverage.out coverage.html
+	rm -rf data/
+	rm -rf ~/.go-wire-vpn/
 endif
+	@echo "VPN connections reset - clients need to re-register"
 
 clean-all: clean
+	@echo "Cleaning downloaded libraries..."
 ifeq ($(OS),Windows_NT)
 	@if exist lib rmdir /s /q lib 2>nul || true
 else
@@ -133,7 +140,7 @@ help:
 	@echo "  deps              - Verify and download dependencies"
 	@echo "  lint              - Run linter"
 	@echo "  fmt               - Format code"
-	@echo "  clean             - Clean build artifacts"
-	@echo "  clean-all         - Clean build artifacts and downloaded libs"
+	@echo "  clean             - Clean build artifacts and VPN data (reset connections)"
+	@echo "  clean-all         - Clean build artifacts, VPN data, and downloaded libs"
 	@echo "  download-wintun   - Download WinTun DLLs for Windows support"
 	@echo "  help              - Show this help"

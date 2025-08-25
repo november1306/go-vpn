@@ -60,6 +60,9 @@ func (tm *TunnelManager) Disconnect() error {
 
 	fmt.Println("🔌 Disconnecting VPN tunnel...")
 
+	// Clean up routing before tearing down interface
+	tm.cleanupRouting()
+
 	// Tear down WireGuard interface (best effort)
 	if err := tm.teardownWireGuardInterface(); err != nil {
 		fmt.Printf("Warning: %v\n", err)
@@ -434,6 +437,20 @@ func (tm *TunnelManager) configureFullTrafficRouting() error {
 	fmt.Println("   Use 'ping 10.0.0.1' to test VPN connectivity.")
 
 	return nil
+}
+
+// cleanupRouting removes VPN routes added during connection
+func (tm *TunnelManager) cleanupRouting() {
+	fmt.Println("🧹 Cleaning up VPN routes...")
+	
+	// Remove the VPN subnet route we added
+	routeCmd := exec.Command("route", "delete", "10.0.0.0", "mask", "255.255.255.0")
+	if err := routeCmd.Run(); err != nil {
+		// Route might not exist, that's okay
+		fmt.Printf("   Route cleanup: %v (may be expected)\n", err)
+	} else {
+		fmt.Println("✅ VPN subnet routes removed")
+	}
 }
 
 // configureUnixVPNRouting configures Unix routing for VPN traffic
