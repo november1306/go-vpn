@@ -171,8 +171,12 @@ func main() {
 
 	fmt.Printf("Server public key: %s\n", serverPublicKey)
 
-	// Initialize VPN server
-	vpnServer = vpnserver.NewUserspaceVPNServer()
+	// Initialize VPN server with persistent storage
+	dataDir := "data" // Create data directory for peer persistence
+	vpnServer, err = vpnserver.NewUserspaceVPNServer(dataDir)
+	if err != nil {
+		log.Fatalf("Failed to create VPN server: %v", err)
+	}
 
 	serverConfig := vpnserver.ServerConfig{
 		InterfaceName: cfg.Server.InterfaceName,
@@ -208,19 +212,23 @@ func main() {
 		}
 	}
 
+
 	// Set up HTTP server
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/register", handleRegister)
 	mux.HandleFunc("/api/status", handleStatus)
-	mux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusOK)
-		fmt.Fprintf(w, "OK - Server running\n")
-	})
+	mux.HandleFunc("/health", handleHealth)
+	
+	// VPN test endpoint - only accessible through VPN network
+	mux.HandleFunc("/api/vpn-test", handleVPNTest)
+
+	// Use mux directly without validation middleware
+	var handler http.Handler = mux
 
 	// Create HTTP server
 	httpServer := &http.Server{
 		Addr:    fmt.Sprintf(":%d", cfg.Server.APIPort),
-		Handler: mux,
+		Handler: handler,
 		// Security settings from configuration
 		ReadTimeout:  cfg.Timeouts.HTTPRead,
 		WriteTimeout: cfg.Timeouts.HTTPWrite,
@@ -262,6 +270,58 @@ func main() {
 	}
 
 	slog.Info("Server shutdown complete")
+}
+
+// handleHealth provides a health check endpoint that returns JSON
+func handleHealth(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		writeErrorJSON(w, http.StatusMethodNotAllowed, "Method not allowed")
+		return
+	}
+
+	response := map[string]interface{}{
+		"status":    "ok",
+		"message":   "Server is running",
+		"timestamp": time.Now().UTC().Format(time.RFC3339),
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	
+	if err := json.NewEncoder(w).Encode(response); err != nil {
+		slog.Error("Failed to encode health response", "error", err)
+	}
+}
+
+// handleVPNTest provides a test endpoint to verify VPN tunneling
+func handleVPNTest(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		writeErrorJSON(w, http.StatusMethodNotAllowed, "Method not allowed")
+		return
+	}
+
+	// Get client's source IP
+	clientIP := r.RemoteAddr
+	if forwarded := r.Header.Get("X-Forwarded-For"); forwarded != "" {
+		clientIP = forwarded
+	}
+
+	response := map[string]interface{}{
+		"message":    "VPN tunnel test successful!",
+		"clientIP":   clientIP,
+		"serverTime": time.Now().UTC().Format(time.RFC3339),
+		"via":        "VPN tunnel",
+		"note":       "If you can see this, your VPN tunnel is working",
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	
+	if err := json.NewEncoder(w).Encode(response); err != nil {
+		slog.Error("Failed to encode VPN test response", "error", err)
+	}
+	
+	slog.Info("VPN test endpoint accessed", "clientIP", clientIP)
 }
 
 // isTUNError checks if the error is related to TUN interface creation

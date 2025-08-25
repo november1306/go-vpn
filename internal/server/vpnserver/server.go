@@ -17,23 +17,30 @@ const (
 // VPNServer manages the WireGuard VPN server with pluggable backends
 // This allows scaling from userspace (MVP) to kernel implementations (high-scale)
 type VPNServer struct {
-	mu      sync.RWMutex
-	backend WireGuardBackend
-	config  ServerConfig
-	running bool
+	mu        sync.RWMutex
+	backend   WireGuardBackend
+	config    ServerConfig
+	running   bool
+	peerStore *PeerStore // Persistent peer storage for restart resilience
 }
 
 // NewVPNServer creates a new VPN server with the specified backend
 // For MVP, use NewUserspaceBackend(). For scale, implement KernelBackend later.
-func NewVPNServer(backend WireGuardBackend) *VPNServer {
-	return &VPNServer{
-		backend: backend,
+func NewVPNServer(backend WireGuardBackend, dataDir string) (*VPNServer, error) {
+	peerStore, err := NewPeerStore(dataDir)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create peer store: %w", err)
 	}
+
+	return &VPNServer{
+		backend:   backend,
+		peerStore: peerStore,
+	}, nil
 }
 
 // NewUserspaceVPNServer creates a VPN server with userspace backend (convenience constructor)
-func NewUserspaceVPNServer() *VPNServer {
-	return NewVPNServer(NewUserspaceBackend())
+func NewUserspaceVPNServer(dataDir string) (*VPNServer, error) {
+	return NewVPNServer(NewUserspaceBackend(), dataDir)
 }
 
 // Start initializes and starts the VPN server
@@ -55,6 +62,12 @@ func (s *VPNServer) Start(ctx context.Context, config ServerConfig) error {
 	// Start the backend
 	if err := s.backend.Start(ctx, config); err != nil {
 		return fmt.Errorf("backend start failed: %w", err)
+	}
+
+	// Restore persisted peers (WireGuard best practice: survive restarts)
+	if err := s.restorePersistedPeers(); err != nil {
+		slog.Warn("Failed to restore persisted peers", "error", err)
+		// Don't fail startup, just log warning
 	}
 
 	s.config = config
@@ -109,6 +122,12 @@ func (s *VPNServer) AddClient(publicKey string, clientIP string) error {
 		return fmt.Errorf("failed to add client peer: %w", err)
 	}
 
+	// Persist peer configuration (survive server restarts)
+	if err := s.peerStore.AddPeer(publicKey, clientIP+"/32"); err != nil {
+		slog.Warn("Failed to persist peer configuration", "error", err)
+		// Don't fail the registration, just log warning
+	}
+
 	slog.Info("VPN client added successfully", "clientIP", clientIP)
 	return nil
 }
@@ -126,6 +145,12 @@ func (s *VPNServer) RemoveClient(publicKey string) error {
 
 	if err := s.backend.RemovePeer(publicKey); err != nil {
 		return fmt.Errorf("failed to remove client peer: %w", err)
+	}
+
+	// Remove from persistent storage
+	if err := s.peerStore.RemovePeer(publicKey); err != nil {
+		slog.Warn("Failed to remove peer from persistent storage", "error", err)
+		// Don't fail the removal, just log warning
 	}
 
 	slog.Info("VPN client removed successfully")
@@ -219,4 +244,30 @@ func (s *VPNServer) validateConfig(config ServerConfig) error {
 // derivePublicKey derives the public key from the private key
 func (s *VPNServer) derivePublicKey(privateKey string) (string, error) {
 	return keys.PublicKeyFromPrivate(privateKey)
+}
+
+// restorePersistedPeers restores peer configurations after server restart
+// This ensures WireGuard best practice: registered peers survive restarts
+func (s *VPNServer) restorePersistedPeers() error {
+	peers := s.peerStore.ListPeers()
+	if len(peers) == 0 {
+		slog.Info("No persisted peers to restore")
+		return nil
+	}
+
+	slog.Info("Restoring persisted peers", "count", len(peers))
+	restored := 0
+	
+	for publicKey, peerConfig := range peers {
+		allowedIPs := []string{peerConfig.AllowedIPs}
+		if err := s.backend.AddPeer(publicKey, allowedIPs); err != nil {
+			slog.Warn("Failed to restore peer", "publicKey", publicKey, "error", err)
+			continue
+		}
+		restored++
+		slog.Debug("Restored peer", "publicKey", publicKey, "allowedIPs", peerConfig.AllowedIPs)
+	}
+	
+	slog.Info("Peer restoration complete", "restored", restored, "total", len(peers))
+	return nil
 }

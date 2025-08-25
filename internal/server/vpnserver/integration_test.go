@@ -39,7 +39,7 @@ type StatusResponse struct {
 // TestVPNServerClientIntegration tests the complete client-server communication workflow
 func TestVPNServerClientIntegration(t *testing.T) {
 	// Skip on systems without TUN support
-	server := NewUserspaceVPNServer()
+	server, _ := NewUserspaceVPNServer("test_data")
 
 	// Generate server keys
 	serverPrivKey, serverPubKey, err := keys.GenerateKeyPair()
@@ -231,7 +231,7 @@ func TestHTTPAPIIntegration(t *testing.T) {
 	}
 
 	// Create server instance
-	server := NewUserspaceVPNServer()
+	server, _ := NewUserspaceVPNServer("test_data")
 
 	config := ServerConfig{
 		InterfaceName: "wg-test-http",

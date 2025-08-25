@@ -18,7 +18,7 @@ func init() {
 	cfg = config.Load()
 
 	// Initialize VPN server for testing (will fail on Windows but handlers still work)
-	vpnServer = vpnserver.NewUserspaceVPNServer()
+	vpnServer, _ = vpnserver.NewUserspaceVPNServer("test_data")
 }
 
 func TestHandleRegister(t *testing.T) {

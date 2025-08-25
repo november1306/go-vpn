@@ -10,7 +10,11 @@ import (
 // Example demonstrates basic VPN server usage
 func ExampleVPNServer() {
 	// Create a userspace VPN server (suitable for MVP, up to ~500 users)
-	server := NewUserspaceVPNServer()
+	server, err := NewUserspaceVPNServer("test_data")
+	if err != nil {
+		fmt.Printf("Failed to create VPN server: %v\n", err)
+		return
+	}
 
 	// Generate server private key
 	serverPrivKey, _, _ := keys.GenerateKeyPair()
@@ -59,7 +63,7 @@ func ExampleVPNServer() {
 // Example for scaling to high-performance backend
 func ExampleVPNServer_scalingPath() {
 	// Current approach: Userspace backend
-	userspaceServer := NewUserspaceVPNServer()
+	userspaceServer, _ := NewUserspaceVPNServer("test_data")
 
 	// Future scaling approach: Abstract backend allows swapping implementations
 	// without changing server logic
@@ -83,7 +87,7 @@ func ExampleVPNServer_scalingPath() {
 
 // Example of VPN server integration with HTTP API
 func ExampleVPNServer_httpIntegration() {
-	server := NewUserspaceVPNServer()
+	server, _ := NewUserspaceVPNServer("test_data")
 
 	// This would be integrated into cmd/server/main.go
 	serverPrivKey, _, _ := keys.GenerateKeyPair()

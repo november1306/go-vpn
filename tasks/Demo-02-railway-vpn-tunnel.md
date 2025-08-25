@@ -1,55 +1,58 @@
-# Demo-02 Railway VPN Tunnel with IP Masking
+# Demo-02 Local VPN Tunnel with Server/Client
 
 **Priority: HIGH** (Demo/proof of concept)
 **Phase: Demo** (Working VPN tunnel prototype)
 
+**⚠️ Updated Scope**: Railway deployment requires Linux root privileges for TUN device creation. Demo updated to run server and client locally for development/testing. Production deployment will target dedicated Linux VM.
+
 ## Summary
-Deploy the VPN server to Railway and establish a working VPN tunnel where:
-1. Server deploys to Railway Linux with public IP
-2. Local CLI client connects and registers with Railway server
-3. VPN tunnel routes all traffic through Railway server
-4. Local IP is masked - `curl ifconfig.me` shows Railway server IP
-5. One hardcoded client for simplicity
+Demonstrate working VPN tunnel with local server and client:
+1. VPN server runs locally with TUN interface support
+2. CLI client connects and registers with local server
+3. VPN tunnel established between server and client
+4. Verify tunnel connectivity and configuration
+5. Foundation for future remote Linux VM deployment
 
 ## Goal
-Demonstrate working end-to-end VPN! Traffic routing through Railway with IP masking.
+Demonstrate working end-to-end VPN locally! Establish foundation for remote deployment.
 
 ## Deliverables
 
-### Server Side (Railway Deployment)
-- **Railway Deploy**: Server runs on Railway Linux with TUN device support
+### Server Side (Local Development)
+- **Local Server**: Server runs locally with TUN device support (Linux/macOS)
 - **VPN Backend**: Full WireGuard tunnel using `internal/server/vpnserver`
 - **API Endpoints**: 
   - `POST /api/register` - client registration with IP allocation
   - `GET /api/status` - server and peer status
-  - `GET /health` - health check for Railway
-- **Configuration**: Environment-based config for Railway deployment
-- **Logging**: Structured logging for Railway logs dashboard
+  - `GET /health` - health check endpoint
+  - `GET /api/vpn-test` - VPN tunnel functionality test endpoint
+- **Configuration**: Local config file or environment variables
+- **Logging**: Console logging for development
 
 ### Client Side
-- **Registration**: `vpn-cli register --server=https://railway-server.railway.app`
+- **Registration**: `vpn-cli register --server=http://localhost:8443`
 - **Connection**: `vpn-cli connect` - establishes VPN tunnel
-- **Verification**: `curl ifconfig.me` returns Railway server IP
+- **Verification**: Ping server IP and check tunnel connectivity
 - **Disconnect**: `vpn-cli disconnect` - clean tunnel teardown
 
 ## Test Scenario
 
 ```bash
-# 1. Deploy to Railway (automated)
-git push railway main
-# Railway deploys server with public endpoint
+# 1. Start local VPN server
+go run ./cmd/server
+# Server starts on localhost:8443 (HTTP API) and localhost:51820 (VPN)
 
-# 2. Local client registration
-vpn-cli register --server=https://go-vpn-production.up.railway.app
+# 2. Local client registration (in separate terminal)
+vpn-cli register --server=http://localhost:8443
 # Output:
 # 🔐 Client Registration Demo
 # Generating client key pair...
 # ✅ Client Public Key: k7vHfX4Km9f8d3wq5N8F2g5z7m1P3Q6r9s2B5x8C4A=
-# 📡 Registering with server: https://go-vpn-production.up.railway.app
+# 📡 Registering with server: http://localhost:8443
 # ✅ Registration successful - VPN tunnel established
 # 📋 Server Details:
 #   Public Key: m8wHgY5Lm0g9e4xr6O9G3h6z8n2Q4R7t0u3C6y9D5B=
-#   Endpoint: go-vpn-production.up.railway.app:51820
+#   Endpoint: localhost:51820
 #   Your VPN IP: 10.0.0.2/32
 
 # 3. Connect VPN tunnel
@@ -57,11 +60,12 @@ vpn-cli connect
 # Output:
 # 🔗 Connecting to VPN server...
 # ✅ VPN tunnel established
-# 📍 Your traffic is now routed through: Railway US-West
+# 📍 VPN tunnel established to local server
 
-# 4. Verify IP masking
-curl ifconfig.me
-# Output: [Railway server public IP, not local IP]
+# 4. Verify tunnel connectivity
+ping 10.0.0.1
+# Output: PING 10.0.0.1 (10.0.0.1) 56(84) bytes of data.
+# 64 bytes from 10.0.0.1: icmp_seq=1 ttl=64 time=0.123 ms
 
 # 5. Disconnect
 vpn-cli disconnect
@@ -87,7 +91,7 @@ Content-Type: application/json
 ```json
 {
   "serverPublicKey": "m8wHgY5Lm0g9e4xr6O9G3h6z8n2Q4R7t0u3C6y9D5B=",
-  "serverEndpoint": "go-vpn-production.up.railway.app:51820", 
+  "serverEndpoint": "localhost:51820", 
   "clientIP": "10.0.0.2/32",
   "message": "Registration successful - VPN tunnel established",
   "timestamp": "2025-01-10T10:30:00Z"
@@ -116,7 +120,7 @@ GET /api/status
   ],
   "serverInfo": {
     "publicKey": "m8wHgY5Lm0g9e4xr...",
-    "endpoint": "go-vpn-production.up.railway.app:51820",
+    "endpoint": "localhost:51820",
     "listenPort": 51820
   },
   "timestamp": "2025-01-10T10:33:00Z"
@@ -125,10 +129,10 @@ GET /api/status
 
 ## Implementation Plan
 
-1. **Railway Configuration**:
-   - `railway.json` with port mappings (51820 UDP, 8443 TCP)
-   - Environment variables for server config
-   - Dockerfile optimized for Railway Linux deployment
+1. **Local Development Setup**:
+   - Server configuration for localhost deployment
+   - TUN interface creation (requires sudo/admin privileges)
+   - Local port bindings (51820 UDP, 8443 TCP)
 
 2. **Server Updates** (`cmd/server/main.go`):
    - Full VPN server integration using `internal/server/vpnserver`
@@ -148,40 +152,43 @@ GET /api/status
    - Route all traffic (`0.0.0.0/0`) through tunnel
 
 ## Acceptance Criteria
-- [ ] Server deploys successfully to Railway with public endpoint
-- [ ] `curl https://go-vpn-production.up.railway.app/health` returns 200 OK
+- [ ] Server starts successfully locally with TUN interface
+- [ ] `curl http://localhost:8443/health` returns 200 OK
 - [ ] Client registration completes with valid WireGuard config
 - [ ] `vpn-cli connect` establishes working tunnel
-- [ ] `curl ifconfig.me` shows Railway server IP (not local IP)
-- [ ] `vpn-cli status` shows connected state with transfer stats
+- [ ] `ping 10.0.0.1` succeeds through VPN tunnel
+- [ ] `vpn-cli status` shows connected state with server details
 - [ ] `vpn-cli disconnect` cleanly tears down tunnel
-- [ ] Local IP restored after disconnect
-- [ ] Railway logs show peer connection and data transfer
+- [ ] Server logs show peer connection and registration
+- [ ] Foundation ready for remote Linux VM deployment
 
 ## Technical Details
-- **Deployment**: Railway with Dockerfile
-- **Protocol**: HTTPS API (port 8443), WireGuard UDP (port 51820)
+- **Deployment**: Local development environment
+- **Protocol**: HTTP API (port 8443), WireGuard UDP (port 51820)
 - **Network**: `10.0.0.0/24` subnet, client gets `10.0.0.2/32`
-- **Routing**: All traffic (`0.0.0.0/0`) through VPN tunnel
-- **Platform**: Linux server (Railway), cross-platform client
-- **Config**: Environment variables for Railway deployment
+- **Routing**: VPN subnet routing for tunnel connectivity
+- **Platform**: Local Linux/macOS for server, cross-platform client
+- **Config**: Local configuration files
 
 ## Future Extensions
 This demo establishes foundation for:
+- Remote Linux VM deployment (Hetzner Cloud/DigitalOcean)
 - Multi-client support with dynamic IP allocation
 - Authentication and authorization
-- Hetzner Cloud migration
 - Traffic analytics and monitoring
 - Client configuration management
+- Full internet traffic routing (0.0.0.0/0)
 
 ## Estimate
 4-5 hours (Railway deployment + VPN tunnel configuration)
 
 ## Dependencies
 - P1-1.4 (VPN server backend) - **COMPLETED** ✅
-- P1-1.5 (Minimal server) - **IN PROGRESS** 
+- P1-1.5 (Minimal server) - **COMPLETED** ✅
+- P3-3.1 (CLI setup) - **COMPLETED** ✅
+- P3-3.2 (Client config storage) - **COMPLETED** ✅
 - Demo-01 (Client-server communication) - **COMPLETED** ✅
-- Railway account and CLI setup - **REQUIRED**
+- Linux/macOS environment with sudo access - **REQUIRED**
 
 ## Task Sequence
 1. **First**: Complete Railway deployment configuration
@@ -193,12 +200,13 @@ This demo establishes foundation for:
    - Platform-specific routing table management
    
 3. **Third**: End-to-end testing
-   - Deploy to Railway and test registration
-   - Verify IP masking with `curl ifconfig.me`
+   - Test local server startup and API endpoints
+   - Verify tunnel establishment and connectivity
    - Test clean connect/disconnect cycles
 
 ## Notes
-- Use Railway's included TUN device support (Linux containers)
-- Start with HTTP for API, upgrade to HTTPS for production
+- Requires sudo/admin privileges for TUN interface creation
+- HTTP API for local development, HTTPS for remote deployment
 - Focus on single hardcoded client for demo simplicity
-- Document Railway deployment process for future automation
+- Document local setup process for team development
+- Plan migration path to remote Linux VM deployment

@@ -11,7 +11,7 @@ import (
 
 func TestVPNServerLifecycle(t *testing.T) {
 	// Test basic server lifecycle: start, configure, stop
-	server := NewUserspaceVPNServer()
+	server, _ := NewUserspaceVPNServer("test_data")
 
 	// Generate test server key
 	serverPrivKey, _, err := keys.GenerateKeyPair()
@@ -91,7 +91,7 @@ func TestVPNServerLifecycle(t *testing.T) {
 
 func TestVPNServerPeerManagement(t *testing.T) {
 	// Test adding and removing peers
-	server := NewUserspaceVPNServer()
+	server, _ := NewUserspaceVPNServer("test_data")
 
 	// Generate server and client keys
 	serverPrivKey, _, err := keys.GenerateKeyPair()
@@ -220,7 +220,7 @@ func TestVPNServerPeerManagement(t *testing.T) {
 
 func TestVPNServerErrorCases(t *testing.T) {
 	// Test error conditions
-	server := NewUserspaceVPNServer()
+	server, _ := NewUserspaceVPNServer("test_data")
 	ctx := context.Background()
 
 	t.Run("InvalidConfiguration", func(t *testing.T) {
