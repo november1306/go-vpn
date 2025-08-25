@@ -24,6 +24,9 @@ docker-compose.override.yml
 # Logs
 *.log
 
+# Runtime data
+data/
+
 # Claude Code personal settings
 .claude/settings.local.json
 .claude/*.local.*

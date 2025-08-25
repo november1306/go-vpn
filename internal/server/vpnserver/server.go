@@ -208,9 +208,15 @@ func (s *VPNServer) GetServerInfo() (ServerInfo, error) {
 		return ServerInfo{}, fmt.Errorf("failed to derive public key: %w", err)
 	}
 
+	// Use PublicEndpoint if configured, otherwise default to localhost format
+	endpoint := s.config.PublicEndpoint
+	if endpoint == "" {
+		endpoint = fmt.Sprintf(":%d", s.config.ListenPort) // Localhost testing
+	}
+
 	return ServerInfo{
 		PublicKey: publicKey,
-		Endpoint:  fmt.Sprintf(":%d", s.config.ListenPort), // Client needs to know port
+		Endpoint:  endpoint,
 		ServerIP:  s.config.ServerIP,
 	}, nil
 }

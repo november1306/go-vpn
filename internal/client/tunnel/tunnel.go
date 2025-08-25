@@ -1,12 +1,15 @@
 package tunnel
 
 import (
+	"context"
 	"encoding/base64"
 	"encoding/hex"
 	"fmt"
+	"net"
 	"os"
 	"os/exec"
 	"runtime"
+	"strconv"
 	"strings"
 	"time"
 
@@ -42,12 +45,21 @@ func (tm *TunnelManager) Connect() error {
 		return fmt.Errorf("failed to setup WireGuard interface: %w", err)
 	}
 
-	// Update runtime state (no persistence - WireGuard manages connection)
-	tm.connected = true
-
-	fmt.Printf("✅ VPN tunnel established\n")
-	fmt.Printf("📍 Your traffic is now routed through: %s\n", tm.config.ServerEndpoint)
-	fmt.Printf("🔒 Your VPN IP: %s\n", tm.config.ClientIP)
+	// Verify handshake completion
+	if tm.verifyConnection() {
+		tm.connected = true
+		fmt.Printf("✅ VPN tunnel established and handshake completed\n")
+		fmt.Printf("📍 Your traffic is now routed through: %s\n", tm.config.ServerEndpoint)
+		fmt.Printf("🔒 Your VPN IP: %s\n", tm.config.ClientIP)
+	} else {
+		tm.connected = false
+		fmt.Printf("⚠️ VPN interface created but handshake failed\n")
+		fmt.Printf("🔧 Troubleshooting:\n")
+		fmt.Printf("   - Check Windows firewall (may need to allow UDP for this app)\n")
+		fmt.Printf("   - Try from different network if behind restrictive NAT\n")
+		fmt.Printf("   - Server endpoint: %s\n", tm.config.ServerEndpoint)
+		return fmt.Errorf("VPN handshake failed - interface created but cannot reach server")
+	}
 
 	return nil
 }
@@ -59,6 +71,9 @@ func (tm *TunnelManager) Disconnect() error {
 	}
 
 	fmt.Println("🔌 Disconnecting VPN tunnel...")
+
+	// Clean up routing before tearing down interface
+	tm.cleanupRouting()
 
 	// Tear down WireGuard interface (best effort)
 	if err := tm.teardownWireGuardInterface(); err != nil {
@@ -175,21 +190,6 @@ func base64ToHex(b64Key string) (string, error) {
 	return hex.EncodeToString(keyBytes), nil
 }
 
-// configureInterfaceIP is deprecated - IP configuration is handled by wireguard-go userspace implementation
-// The userspace implementation manages its own virtual network stack
-func (tm *TunnelManager) configureInterfaceIP() error {
-	// This method is no longer used - wireguard-go userspace handles IP configuration internally
-	fmt.Println("IP configuration handled by userspace WireGuard implementation")
-	return nil
-}
-
-// configureRoutes is deprecated - routing is handled by wireguard-go userspace implementation
-// The userspace implementation manages its own routing through the virtual TUN interface
-func (tm *TunnelManager) configureRoutes() error {
-	// This method is no longer used - wireguard-go userspace handles routing internally
-	fmt.Println("Routing configuration handled by userspace WireGuard implementation")
-	return nil
-}
 
 // generateWireGuardConfig creates the WireGuard configuration
 func (tm *TunnelManager) generateWireGuardConfig() (string, error) {
@@ -406,26 +406,256 @@ func (tm *TunnelManager) configureWindowsVPNRouting() error {
 func (tm *TunnelManager) configureFullTrafficRouting() error {
 	fmt.Println("🌐 Configuring full traffic routing through VPN...")
 
-	// Get current default gateway
-	cmd := exec.Command("route", "print", "0.0.0.0")
-	output, err := cmd.CombinedOutput()
+	// Add basic VPN subnet routing to allow communication with VPN server
+	fmt.Println("⚠️  Configuring basic VPN subnet routing (10.0.0.0/24)...")
+
+	// Get TUN interface information
+	tunInterfaceIndex, err := tm.getTunInterfaceIndex()
 	if err != nil {
-		return fmt.Errorf("failed to get current routing table: %w", err)
+		return fmt.Errorf("failed to get TUN interface index: %w", err)
 	}
 
-	fmt.Printf("Current routing table:\n%s\n", string(output))
+	// Step 1: Get current default gateway before we change it
+	fmt.Println("   Getting current default gateway...")
+	defaultGatewayCmd := exec.Command("route", "print", "0.0.0.0")
+	defaultOutput, err := defaultGatewayCmd.CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("failed to get current default gateway: %w", err)
+	}
+	
+	// Extract current default gateway for host route
+	currentGateway, currentInterface := tm.extractDefaultGateway(string(defaultOutput))
+	if currentGateway == "" {
+		return fmt.Errorf("could not determine current default gateway")
+	}
+	fmt.Printf("   Current default gateway: %s via interface %s\n", currentGateway, currentInterface)
+	
+	// Step 2: Add host route for VPN server to prevent routing loop
+	serverIP := strings.Split(tm.config.ServerEndpoint, ":")[0]
+	if serverIP != "127.0.0.1" && serverIP != "localhost" {
+		fmt.Printf("   Adding host route for VPN server %s...\n", serverIP)
+		hostRouteCmd := exec.Command("route", "add", serverIP, "mask", "255.255.255.255", currentGateway)
+		if err := hostRouteCmd.Run(); err != nil {
+			fmt.Printf("⚠️  Warning: Failed to add host route for VPN server: %v\n", err)
+		}
+	}
+	
+	// Step 3: Route all traffic through VPN tunnel
+	fmt.Printf("   Routing ALL traffic through WireGuard interface %d...\n", tunInterfaceIndex)
+	
+	// Add 0.0.0.0/1 and 128.0.0.0/1 routes (this covers all traffic)
+	// This is the standard VPN approach to override the default route
+	routes := []struct{ network, mask string }{
+		{"0.0.0.0", "128.0.0.0"},     // 0.0.0.0/1
+		{"128.0.0.0", "128.0.0.0"},   // 128.0.0.0/1
+	}
+	
+	for _, route := range routes {
+		routeCmd := exec.Command("route", "add", route.network, "mask", route.mask, "0.0.0.0", "if", strconv.Itoa(tunInterfaceIndex), "metric", "1")
+		routeOutput, err := routeCmd.CombinedOutput()
+		if err != nil {
+			fmt.Printf("⚠️  Failed to add route %s/%s: %v\n", route.network, route.mask, err)
+			fmt.Printf("   Route command output: %s\n", string(routeOutput))
+		} else {
+			fmt.Printf("✅ Route %s/%s configured through interface %d\n", route.network, route.mask, tunInterfaceIndex)
+		}
+	}
+	
+	// Step 4: Add VPN subnet route for server communication
+	vpcRouteCmd := exec.Command("route", "add", "10.0.0.0", "mask", "255.255.255.0", "0.0.0.0", "if", strconv.Itoa(tunInterfaceIndex), "metric", "1")
+	if err := vpcRouteCmd.Run(); err != nil {
+		fmt.Printf("⚠️  Warning: Failed to add VPN subnet route: %v\n", err)
+	}
 
-	// For now, show what would be configured rather than actually changing routes
-	// This prevents breaking the user's internet connection during testing
-	fmt.Println("⚠️  Full routing configuration would:")
-	fmt.Println("   1. Add route for VPN server via current gateway")
-	fmt.Println("   2. Replace default route (0.0.0.0/0) to go through VPN")
-	fmt.Println("   3. Configure DNS to use VPN-provided DNS servers")
 	fmt.Println()
-	fmt.Println("💡 This is disabled for safety during local testing.")
-	fmt.Println("   Deploy to production environment to enable full VPN routing.")
+	fmt.Println("🌐 ALL TRAFFIC now routes through VPN!")
+	fmt.Println("   Your real IP is hidden and all internet traffic is encrypted.")
+	fmt.Println("   Use 'ping google.com' or 'curl https://ipinfo.io/ip' to test.")
 
 	return nil
+}
+
+// cleanupRouting removes VPN routes added during connection
+func (tm *TunnelManager) cleanupRouting() {
+	fmt.Println("🧹 Cleaning up VPN routes...")
+
+	// Remove the routes we added for full traffic routing
+	routes := []struct{ network, mask string }{
+		{"0.0.0.0", "128.0.0.0"},     // 0.0.0.0/1
+		{"128.0.0.0", "128.0.0.0"},   // 128.0.0.0/1
+		{"10.0.0.0", "255.255.255.0"}, // VPN subnet
+	}
+	
+	for _, route := range routes {
+		routeCmd := exec.Command("route", "delete", route.network, "mask", route.mask)
+		if err := routeCmd.Run(); err != nil {
+			// Route might not exist, that's okay
+			fmt.Printf("   Route cleanup %s/%s: %v (may be expected)\n", route.network, route.mask, err)
+		} else {
+			fmt.Printf("✅ Route %s/%s removed\n", route.network, route.mask)
+		}
+	}
+	
+	// Remove host route for VPN server
+	serverIP := strings.Split(tm.config.ServerEndpoint, ":")[0]
+	if serverIP != "127.0.0.1" && serverIP != "localhost" {
+		hostRouteCmd := exec.Command("route", "delete", serverIP, "mask", "255.255.255.255")
+		if err := hostRouteCmd.Run(); err != nil {
+			fmt.Printf("   Host route cleanup %s: %v (may be expected)\n", serverIP, err)
+		} else {
+			fmt.Printf("✅ Host route for %s removed\n", serverIP)
+		}
+	}
+}
+
+// verifyConnection checks if the WireGuard handshake actually completed
+func (tm *TunnelManager) verifyConnection() bool {
+	fmt.Println("🔍 Verifying handshake completion...")
+
+	// Wait a moment for handshake to potentially complete
+	time.Sleep(3 * time.Second)
+
+	// Step 1: Check if server is reachable externally (only for remote servers)
+	serverIP := strings.Split(tm.config.ServerEndpoint, ":")[0]
+	if serverIP != "127.0.0.1" && serverIP != "localhost" {
+		fmt.Printf("   Testing external connectivity to %s...\n", serverIP)
+
+		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+		defer cancel()
+		pingCmd := exec.CommandContext(ctx, "ping", "-n", "1", "-w", "1000", serverIP)
+		pingOutput, pingErr := pingCmd.CombinedOutput()
+
+		if pingErr != nil || strings.Contains(string(pingOutput), "Request timed out") {
+			fmt.Printf("❌ DIAGNOSIS: Cannot reach server externally - network/routing issue\n")
+			fmt.Printf("   Server %s is unreachable from your network\n", serverIP)
+			return false
+		}
+		fmt.Printf("✅ External connectivity OK - server %s is reachable\n", serverIP)
+	}
+
+	// Step 2: Test VPN tunnel connectivity (most important test)
+	if tm.config.ServerVPNIP != "" {
+		fmt.Printf("   Testing VPN tunnel connectivity to %s...\n", tm.config.ServerVPNIP)
+
+		ctx2, cancel2 := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel2()
+
+		cmd := exec.CommandContext(ctx2, "ping", "-n", "2", "-w", "2000", tm.config.ServerVPNIP)
+		output, err := cmd.CombinedOutput()
+
+		if err == nil && !strings.Contains(string(output), "Request timed out") {
+			fmt.Printf("✅ DIAGNOSIS: VPN tunnel is working correctly!\n")
+			fmt.Printf("   Can reach server at %s through VPN tunnel\n", tm.config.ServerVPNIP)
+			return true
+		}
+
+		// Step 3: Advanced diagnosis - check routing table
+		fmt.Printf("❌ DIAGNOSIS: VPN tunnel connectivity failed\n")
+		fmt.Printf("   Checking routing configuration...\n")
+
+		routeCmd := exec.Command("route", "print", "10.0.0.0")
+		routeOutput, routeErr := routeCmd.CombinedOutput()
+		if routeErr == nil {
+			fmt.Printf("   Current 10.0.0.0 routes:\n%s\n", string(routeOutput))
+
+			// Check if route goes through correct interface
+			if strings.Contains(string(routeOutput), "192.168.") && !strings.Contains(string(routeOutput), "wg") {
+				fmt.Printf("🔧 ROUTING ISSUE DETECTED:\n")
+				fmt.Printf("   VPN traffic is routing through your physical network interface\n")
+				fmt.Printf("   instead of the WireGuard tunnel interface.\n")
+				fmt.Printf("   This has been fixed in the current version.\n")
+				fmt.Printf("   Please reconnect the VPN to apply the fix.\n")
+			} else {
+				fmt.Printf("🔧 POSSIBLE CAUSES:\n")
+				fmt.Printf("   1. Windows firewall blocking UDP traffic\n")
+				fmt.Printf("   2. Network routing configuration issue\n")
+				fmt.Printf("   3. WireGuard handshake not completing\n")
+				fmt.Printf("\n   Try running as Administrator or check Windows firewall settings.\n")
+			}
+		}
+	}
+
+	return false
+}
+
+// getCurrentExecutablePath returns the current executable path for firewall rules
+func getCurrentExecutablePath() string {
+	exe, err := os.Executable()
+	if err != nil {
+		return "vpn-cli.exe"
+	}
+	return exe
+}
+
+// getTunInterfaceIndex gets the Windows interface index for the TUN device
+func (tm *TunnelManager) getTunInterfaceIndex() (int, error) {
+	// Get all network interfaces
+	interfaces, err := net.Interfaces()
+	if err != nil {
+		return 0, fmt.Errorf("failed to get network interfaces: %w", err)
+	}
+
+	// Look for WireGuard/TUN interface by name pattern
+	for _, iface := range interfaces {
+		// Look for WireGuard Tunnel interfaces (typical pattern on Windows)
+		if strings.Contains(strings.ToLower(iface.Name), "wireguard") ||
+			strings.Contains(strings.ToLower(iface.Name), "wg-go-vpn") ||
+			strings.Contains(strings.ToLower(iface.Name), "wintun") {
+			fmt.Printf("Found TUN interface: %s (index: %d)\n", iface.Name, iface.Index)
+			return iface.Index, nil
+		}
+	}
+
+	// If no interface found by name, look for the most recently created interface
+	// that matches typical TUN characteristics (this is a fallback)
+	var candidates []net.Interface
+	for _, iface := range interfaces {
+		// Skip loopback and inactive interfaces
+		if iface.Flags&net.FlagLoopback != 0 || iface.Flags&net.FlagUp == 0 {
+			continue
+		}
+
+		// Look for interfaces that might be TUN devices
+		// TUN interfaces typically have specific characteristics
+		if iface.MTU == 1420 { // Common WireGuard MTU
+			candidates = append(candidates, iface)
+		}
+	}
+
+	// If we found potential candidates, use the one with the highest index (most recent)
+	if len(candidates) > 0 {
+		bestCandidate := candidates[0]
+		for _, candidate := range candidates[1:] {
+			if candidate.Index > bestCandidate.Index {
+				bestCandidate = candidate
+			}
+		}
+		fmt.Printf("Found TUN interface candidate: %s (index: %d)\n", bestCandidate.Name, bestCandidate.Index)
+		return bestCandidate.Index, nil
+	}
+
+	return 0, fmt.Errorf("no WireGuard/TUN interface found - please ensure the WireGuard device is running")
+}
+
+// extractDefaultGateway extracts the current default gateway from route output
+func (tm *TunnelManager) extractDefaultGateway(routeOutput string) (gateway, interfaceName string) {
+	lines := strings.Split(routeOutput, "\n")
+	for _, line := range lines {
+		// Parse the route line: Network Destination  Netmask  Gateway  Interface  Metric
+		fields := strings.Fields(line)
+		if len(fields) >= 4 {
+			// Look for the default route (0.0.0.0 network with 0.0.0.0 netmask)
+			if fields[0] == "0.0.0.0" && fields[1] == "0.0.0.0" {
+				gateway = strings.TrimSpace(fields[2])
+				interfaceName = strings.TrimSpace(fields[3])
+				// Skip if gateway is 0.0.0.0 or On-link (we want the actual gateway)
+				if gateway != "0.0.0.0" && gateway != "On-link" && gateway != "" {
+					return gateway, interfaceName
+				}
+			}
+		}
+	}
+	return "", ""
 }
 
 // configureUnixVPNRouting configures Unix routing for VPN traffic

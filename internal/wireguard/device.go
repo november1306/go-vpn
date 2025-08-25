@@ -25,9 +25,9 @@ func NewWireGuardDevice(interfaceName string) (*WireGuardDevice, error) {
 		return nil, fmt.Errorf("failed to create TUN interface: %w", err)
 	}
 
-	// Create logger for device
+	// Create logger for device - show important events only (handshakes, errors)
 	logger := device.NewLogger(
-		device.LogLevelVerbose,
+		1, // Between Silent and Verbose - shows important events
 		fmt.Sprintf("(%s) ", interfaceName),
 	)
 

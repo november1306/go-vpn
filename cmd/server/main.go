@@ -27,6 +27,8 @@ type RegisterRequest struct {
 type RegisterResponse struct {
 	ServerPublicKey string `json:"serverPublicKey"`
 	ServerEndpoint  string `json:"serverEndpoint"`
+	ServerVPNIP     string `json:"serverVPNIP"`   // Server's IP within VPN network
+	ServerAPIPort   int    `json:"serverAPIPort"` // Server's API port
 	ClientIP        string `json:"clientIP"`
 	Message         string `json:"message"`
 	Timestamp       string `json:"timestamp"`
@@ -97,10 +99,27 @@ func handleRegister(w http.ResponseWriter, r *http.Request) {
 
 	slog.Info("Client registered successfully", "clientIP", clientIP)
 
+	// Extract server VPN IP from ServerIP (remove /24)
+	serverVPNIP := strings.Split(serverInfo.ServerIP, "/")[0]
+
+	// Auto-detect public endpoint if not configured
+	endpoint := serverInfo.Endpoint
+	if endpoint == "" || strings.HasPrefix(endpoint, ":") {
+		// Extract the host from the request to determine public IP
+		host := r.Host
+		if strings.Contains(host, ":") {
+			host = strings.Split(host, ":")[0]
+		}
+		// Use the host the client connected to with the VPN port
+		endpoint = fmt.Sprintf("%s:%d", host, cfg.Server.VPNPort)
+	}
+
 	// Return connection details
 	response := RegisterResponse{
 		ServerPublicKey: serverInfo.PublicKey,
-		ServerEndpoint:  serverInfo.Endpoint,
+		ServerEndpoint:  endpoint,
+		ServerVPNIP:     serverVPNIP,
+		ServerAPIPort:   cfg.Server.APIPort,
 		ClientIP:        clientIP + "/32",
 		Message:         "Registration successful - VPN tunnel established",
 		Timestamp:       time.Now().UTC().Format(time.RFC3339),
@@ -179,10 +198,11 @@ func main() {
 	}
 
 	serverConfig := vpnserver.ServerConfig{
-		InterfaceName: cfg.Server.InterfaceName,
-		PrivateKey:    serverPrivateKey,
-		ListenPort:    cfg.Server.VPNPort,
-		ServerIP:      cfg.Network.ServerIP,
+		InterfaceName:  cfg.Server.InterfaceName,
+		PrivateKey:     serverPrivateKey,
+		ListenPort:     cfg.Server.VPNPort,
+		ServerIP:       cfg.Network.ServerIP,
+		PublicEndpoint: cfg.Server.PublicEndpoint,
 	}
 
 	// Start VPN server
