@@ -179,10 +179,11 @@ func main() {
 	}
 
 	serverConfig := vpnserver.ServerConfig{
-		InterfaceName: cfg.Server.InterfaceName,
-		PrivateKey:    serverPrivateKey,
-		ListenPort:    cfg.Server.VPNPort,
-		ServerIP:      cfg.Network.ServerIP,
+		InterfaceName:  cfg.Server.InterfaceName,
+		PrivateKey:     serverPrivateKey,
+		ListenPort:     cfg.Server.VPNPort,
+		ServerIP:       cfg.Network.ServerIP,
+		PublicEndpoint: cfg.Server.PublicEndpoint,
 	}
 
 	// Start VPN server

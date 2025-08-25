@@ -284,8 +284,9 @@ func runTestVPN() error {
 		serverEndpoint = "localhost" + serverEndpoint
 	}
 
-	// Try to access the VPN test endpoint
-	testURL := "http://localhost:8443/api/vpn-test"
+	// Try to access the VPN test endpoint through the tunnel
+	// Use the VPN server's internal IP to test through the tunnel
+	testURL := "http://10.0.0.1:8443/api/vpn-test"
 	fmt.Printf("Testing VPN endpoint: %s\n", testURL)
 
 	resp, err := http.Get(testURL)

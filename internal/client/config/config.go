@@ -3,6 +3,7 @@ package config
 import (
 	"encoding/json"
 	"fmt"
+	"log"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -128,8 +129,13 @@ func setWindowsHidden(path string) error {
 		return nil
 	}
 
+	// TODO: Implement proper Windows ACL management
+	// For now, log a warning about reduced security
+	log.Printf("WARNING: Config file security on Windows is reduced - implement proper ACLs for production")
+	
 	// Note: This is a simplified implementation
 	// Production code should use Windows APIs for proper ACL management
+	// to set appropriate file permissions and deny access to other users
 	return nil
 }
 
