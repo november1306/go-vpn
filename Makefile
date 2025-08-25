@@ -1,6 +1,6 @@
 # Makefile for go-vpn project
 
-.PHONY: build build-server build-cli test test-unit test-integration test-docker test-all lint fmt clean clean-all deps download-wintun help
+.PHONY: build build-server build-cli run-server run-cli test test-unit test-integration test-docker test-all lint fmt clean clean-all deps download-wintun help
 
 # Default target
 build: build-server build-cli
@@ -8,13 +8,20 @@ build: build-server build-cli
 build-server:
 	@echo "Building VPN server..."
 	@go build -o bin/server$(shell go env GOEXE) ./cmd/server
-ifeq ($(OS),Windows_NT)
-	@if exist lib\amd64\wintun.dll copy lib\amd64\wintun.dll bin\wintun.dll >nul 2>&1 || echo "WinTUN DLL not found - run 'make download-wintun' first"
-endif
 
 build-cli:
 	@echo "Building VPN CLI..."
 	@go build -o bin/vpn-cli$(shell go env GOEXE) ./cmd/vpn-cli
+
+# Run commands
+run-server: build-server
+	@echo "Starting VPN server..."
+	@echo "💡 Using default configuration - create config/server.env for custom settings"
+	@./bin/server$(shell go env GOEXE)
+
+run-cli: build-cli
+	@echo "Starting VPN CLI..."
+	@./bin/vpn-cli$(shell go env GOEXE)
 
 # Cross-platform builds for releases
 build-all:
@@ -76,6 +83,7 @@ lint:
 fmt:
 	go fmt ./...
 
+
 clean:
 ifeq ($(OS),Windows_NT)
 	@if exist bin rmdir /s /q bin 2>nul || true
@@ -110,6 +118,10 @@ help:
 	@echo "  build-cli         - Build CLI client only"
 	@echo "  build-all         - Cross-platform builds"
 	@echo ""
+	@echo "Run commands:"
+	@echo "  run-server        - Build and run VPN server"
+	@echo "  run-cli           - Build and run VPN CLI client"
+	@echo ""
 	@echo "Test stages (aligned with CI):"
 	@echo "  test              - Run unit tests (default)"
 	@echo "  test-unit         - Stage 1: Fast unit tests"
@@ -117,7 +129,7 @@ help:
 	@echo "  test-docker       - Stage 3: Docker container tests"
 	@echo "  test-all          - Run all test stages"
 	@echo ""
-	@echo "Other:"
+	@echo "Development:"
 	@echo "  deps              - Verify and download dependencies"
 	@echo "  lint              - Run linter"
 	@echo "  fmt               - Format code"
