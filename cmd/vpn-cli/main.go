@@ -110,6 +110,8 @@ type RegisterRequest struct {
 type RegisterResponse struct {
 	ServerPublicKey string `json:"serverPublicKey"`
 	ServerEndpoint  string `json:"serverEndpoint"`
+	ServerVPNIP     string `json:"serverVPNIP"`   // Server's IP within VPN network
+	ServerAPIPort   int    `json:"serverAPIPort"` // Server's API port
 	ClientIP        string `json:"clientIP"`
 	Message         string `json:"message"`
 	Timestamp       string `json:"timestamp"`
@@ -168,6 +170,8 @@ func runRegister(serverURL string) error {
 		ClientPublicKey:  clientPubKey,
 		ServerPublicKey:  registerResp.ServerPublicKey,
 		ServerEndpoint:   registerResp.ServerEndpoint,
+		ServerVPNIP:      registerResp.ServerVPNIP,
+		ServerAPIPort:    registerResp.ServerAPIPort,
 		ClientIP:         registerResp.ClientIP,
 		RegisteredAt:     time.Now(),
 	}
@@ -285,8 +289,8 @@ func runTestVPN() error {
 	}
 
 	// Try to access the VPN test endpoint through the tunnel
-	// Use the VPN server's internal IP to test through the tunnel
-	testURL := "http://10.0.0.1:8443/api/vpn-test"
+	// Use the server's VPN IP and API port from saved configuration
+	testURL := fmt.Sprintf("http://%s:%d/api/vpn-test", clientConfig.ServerVPNIP, clientConfig.ServerAPIPort)
 	fmt.Printf("Testing VPN endpoint: %s\n", testURL)
 
 	resp, err := http.Get(testURL)

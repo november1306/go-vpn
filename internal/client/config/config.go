@@ -20,6 +20,8 @@ type ClientConfig struct {
 	// Server connection details
 	ServerPublicKey string `json:"serverPublicKey"`
 	ServerEndpoint  string `json:"serverEndpoint"`
+	ServerVPNIP     string `json:"serverVPNIP"`   // Server's IP within VPN network
+	ServerAPIPort   int    `json:"serverAPIPort"` // Server's API port
 	ClientIP        string `json:"clientIP"`
 
 	// Registration metadata
@@ -132,7 +134,7 @@ func setWindowsHidden(path string) error {
 	// TODO: Implement proper Windows ACL management
 	// For now, log a warning about reduced security
 	log.Printf("WARNING: Config file security on Windows is reduced - implement proper ACLs for production")
-	
+
 	// Note: This is a simplified implementation
 	// Production code should use Windows APIs for proper ACL management
 	// to set appropriate file permissions and deny access to other users
