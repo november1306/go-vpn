@@ -1,6 +1,7 @@
 package tunnel
 
 import (
+	"context"
 	"encoding/base64"
 	"encoding/hex"
 	"fmt"
@@ -42,12 +43,21 @@ func (tm *TunnelManager) Connect() error {
 		return fmt.Errorf("failed to setup WireGuard interface: %w", err)
 	}
 
-	// Update runtime state (no persistence - WireGuard manages connection)
-	tm.connected = true
-
-	fmt.Printf("✅ VPN tunnel established\n")
-	fmt.Printf("📍 Your traffic is now routed through: %s\n", tm.config.ServerEndpoint)
-	fmt.Printf("🔒 Your VPN IP: %s\n", tm.config.ClientIP)
+	// Verify handshake completion
+	if tm.verifyConnection() {
+		tm.connected = true
+		fmt.Printf("✅ VPN tunnel established and handshake completed\n")
+		fmt.Printf("📍 Your traffic is now routed through: %s\n", tm.config.ServerEndpoint)
+		fmt.Printf("🔒 Your VPN IP: %s\n", tm.config.ClientIP)
+	} else {
+		tm.connected = false
+		fmt.Printf("⚠️ VPN interface created but handshake failed\n")
+		fmt.Printf("🔧 Troubleshooting:\n")
+		fmt.Printf("   - Check Windows firewall (may need to allow UDP for this app)\n")
+		fmt.Printf("   - Try from different network if behind restrictive NAT\n")
+		fmt.Printf("   - Server endpoint: %s\n", tm.config.ServerEndpoint)
+		return fmt.Errorf("VPN handshake failed - interface created but cannot reach server")
+	}
 
 	return nil
 }
@@ -451,6 +461,69 @@ func (tm *TunnelManager) cleanupRouting() {
 	} else {
 		fmt.Println("✅ VPN subnet routes removed")
 	}
+}
+
+// verifyConnection checks if the WireGuard handshake actually completed
+func (tm *TunnelManager) verifyConnection() bool {
+	fmt.Println("🔍 Verifying handshake completion...")
+	
+	// Wait a moment for handshake to potentially complete
+	time.Sleep(3 * time.Second)
+	
+	// Step 1: Check if server is reachable externally
+	fmt.Printf("   Testing external connectivity to %s...\n", strings.Split(tm.config.ServerEndpoint, ":")[0])
+	serverIP := strings.Split(tm.config.ServerEndpoint, ":")[0]
+	
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	pingCmd := exec.CommandContext(ctx, "ping", "-n", "1", "-w", "1000", serverIP)
+	pingOutput, pingErr := pingCmd.CombinedOutput()
+	
+	if pingErr != nil || strings.Contains(string(pingOutput), "Request timed out") {
+		fmt.Printf("❌ DIAGNOSIS: Cannot reach server externally - network/routing issue\n")
+		fmt.Printf("   Server %s is unreachable from your network\n", serverIP)
+		return false
+	}
+	fmt.Printf("✅ External connectivity OK - server %s is reachable\n", serverIP)
+	
+	// Step 2: Test VPN tunnel connectivity
+	if tm.config.ServerVPNIP != "" {
+		fmt.Printf("   Testing VPN tunnel connectivity to %s...\n", tm.config.ServerVPNIP)
+		
+		ctx2, cancel2 := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel2()
+		
+		cmd := exec.CommandContext(ctx2, "ping", "-n", "2", "-w", "2000", tm.config.ServerVPNIP)
+		output, err := cmd.CombinedOutput()
+		
+		if err == nil && !strings.Contains(string(output), "Request timed out") {
+			fmt.Printf("✅ DIAGNOSIS: VPN handshake successful - tunnel is working!\n")
+			fmt.Printf("   Can reach server at %s through VPN tunnel\n", tm.config.ServerVPNIP)
+			return true
+		}
+		
+		// Step 3: Firewall diagnosis
+		fmt.Printf("❌ DIAGNOSIS: VPN handshake failed - likely Windows firewall blocking UDP\n")
+		fmt.Printf("   External ping works but VPN tunnel ping fails\n")
+		fmt.Printf("   This indicates WireGuard handshake responses are blocked\n")
+		fmt.Printf("\n🔧 FIREWALL FIX REQUIRED:\n")
+		fmt.Printf("   Run this in PowerShell as Administrator:\n")
+		fmt.Printf("   New-NetFirewallRule -DisplayName \"Go VPN\" -Direction Inbound -Protocol UDP -Action Allow -Program \"%s\"\n", 
+			getCurrentExecutablePath())
+		fmt.Printf("\n   Or manually: Windows Security > Firewall > Allow an app through firewall\n")
+		
+	}
+	
+	return false
+}
+
+// getCurrentExecutablePath returns the current executable path for firewall rules
+func getCurrentExecutablePath() string {
+	exe, err := os.Executable()
+	if err != nil {
+		return "vpn-cli.exe"
+	}
+	return exe
 }
 
 // configureUnixVPNRouting configures Unix routing for VPN traffic
