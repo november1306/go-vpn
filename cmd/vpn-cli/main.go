@@ -277,47 +277,47 @@ func runTestVPN() error {
 	fmt.Println()
 
 	fmt.Println("🧪 Testing VPN tunnel functionality...")
-	
+
 	// Extract server endpoint info
 	serverEndpoint := clientConfig.ServerEndpoint
 	if strings.HasPrefix(serverEndpoint, ":") {
 		serverEndpoint = "localhost" + serverEndpoint
 	}
-	
+
 	// Try to access the VPN test endpoint
 	testURL := "http://localhost:8443/api/vpn-test"
 	fmt.Printf("Testing VPN endpoint: %s\n", testURL)
-	
+
 	resp, err := http.Get(testURL)
 	if err != nil {
 		return fmt.Errorf("VPN test failed - could not reach test endpoint: %w", err)
 	}
 	defer resp.Body.Close()
-	
+
 	if resp.StatusCode != http.StatusOK {
 		return fmt.Errorf("VPN test failed - server returned status %d", resp.StatusCode)
 	}
-	
+
 	// Parse response
 	var testResp map[string]interface{}
 	if err := json.NewDecoder(resp.Body).Decode(&testResp); err != nil {
 		return fmt.Errorf("failed to parse test response: %w", err)
 	}
-	
+
 	// Display results
 	fmt.Println("\n✅ VPN Test Results:")
 	fmt.Printf("   Message: %v\n", testResp["message"])
-	fmt.Printf("   Client IP seen by server: %v\n", testResp["clientIP"])  
+	fmt.Printf("   Client IP seen by server: %v\n", testResp["clientIP"])
 	fmt.Printf("   Server time: %v\n", testResp["serverTime"])
 	fmt.Printf("   Via: %v\n", testResp["via"])
 	fmt.Println()
-	
+
 	// Additional diagnostics
 	fmt.Println("📊 VPN Tunnel Diagnostics:")
 	fmt.Printf("   Local VPN IP: %s\n", clientConfig.ClientIP)
 	fmt.Printf("   Server endpoint: %s\n", clientConfig.ServerEndpoint)
 	fmt.Printf("   Connection method: Userspace WireGuard\n")
-	
+
 	return nil
 }
 

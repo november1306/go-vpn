@@ -237,10 +237,10 @@ func (ub *UserspaceBackend) applyIPCConfig(config string) error {
 // configureServerIP configures the server IP address on the WireGuard interface
 // This allows the server to receive traffic on the VPN network (e.g., respond to pings)
 func (ub *UserspaceBackend) configureServerIP(serverIP string) error {
-	slog.Info("Server IP configuration for userspace WireGuard", 
+	slog.Info("Server IP configuration for userspace WireGuard",
 		"serverIP", serverIP,
 		"note", "Userspace WireGuard manages IP routing internally")
-	
+
 	// For userspace WireGuard implementation, the IP configuration is handled
 	// by the underlying TUN device and routing stack. The server IP (10.0.0.1)
 	// is automatically available for receiving traffic from connected peers.
@@ -248,7 +248,7 @@ func (ub *UserspaceBackend) configureServerIP(serverIP string) error {
 	// Unlike kernel WireGuard, userspace doesn't require explicit IP configuration
 	// on the interface - the TUN device handles packet routing based on the
 	// allowed IPs of connected peers.
-	
+
 	return nil
 }
 

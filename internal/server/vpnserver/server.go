@@ -257,7 +257,7 @@ func (s *VPNServer) restorePersistedPeers() error {
 
 	slog.Info("Restoring persisted peers", "count", len(peers))
 	restored := 0
-	
+
 	for publicKey, peerConfig := range peers {
 		allowedIPs := []string{peerConfig.AllowedIPs}
 		if err := s.backend.AddPeer(publicKey, allowedIPs); err != nil {
@@ -267,7 +267,7 @@ func (s *VPNServer) restorePersistedPeers() error {
 		restored++
 		slog.Debug("Restored peer", "publicKey", publicKey, "allowedIPs", peerConfig.AllowedIPs)
 	}
-	
+
 	slog.Info("Peer restoration complete", "restored", restored, "total", len(peers))
 	return nil
 }

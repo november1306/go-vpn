@@ -31,7 +31,7 @@ func NewPeerStore(dataDir string) (*PeerStore, error) {
 	}
 
 	filePath := filepath.Join(dataDir, "peers.json")
-	
+
 	store := &PeerStore{
 		peers:    make(map[string]*PeerConfig),
 		filePath: filePath,

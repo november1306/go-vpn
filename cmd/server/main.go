@@ -212,13 +212,12 @@ func main() {
 		}
 	}
 
-
 	// Set up HTTP server
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/register", handleRegister)
 	mux.HandleFunc("/api/status", handleStatus)
 	mux.HandleFunc("/health", handleHealth)
-	
+
 	// VPN test endpoint - only accessible through VPN network
 	mux.HandleFunc("/api/vpn-test", handleVPNTest)
 
@@ -287,7 +286,7 @@ func handleHealth(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
-	
+
 	if err := json.NewEncoder(w).Encode(response); err != nil {
 		slog.Error("Failed to encode health response", "error", err)
 	}
@@ -316,11 +315,11 @@ func handleVPNTest(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
-	
+
 	if err := json.NewEncoder(w).Encode(response); err != nil {
 		slog.Error("Failed to encode VPN test response", "error", err)
 	}
-	
+
 	slog.Info("VPN test endpoint accessed", "clientIP", clientIP)
 }
 

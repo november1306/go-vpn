@@ -61,27 +61,27 @@ func TestConfigRoundTrip(t *testing.T) {
 
 	// Verify all fields match
 	if loadedConfig.ClientPrivateKey != testConfig.ClientPrivateKey {
-		t.Errorf("ClientPrivateKey mismatch: got %s, want %s", 
+		t.Errorf("ClientPrivateKey mismatch: got %s, want %s",
 			loadedConfig.ClientPrivateKey, testConfig.ClientPrivateKey)
 	}
 
 	if loadedConfig.ClientPublicKey != testConfig.ClientPublicKey {
-		t.Errorf("ClientPublicKey mismatch: got %s, want %s", 
+		t.Errorf("ClientPublicKey mismatch: got %s, want %s",
 			loadedConfig.ClientPublicKey, testConfig.ClientPublicKey)
 	}
 
 	if loadedConfig.ServerPublicKey != testConfig.ServerPublicKey {
-		t.Errorf("ServerPublicKey mismatch: got %s, want %s", 
+		t.Errorf("ServerPublicKey mismatch: got %s, want %s",
 			loadedConfig.ServerPublicKey, testConfig.ServerPublicKey)
 	}
 
 	if loadedConfig.ServerEndpoint != testConfig.ServerEndpoint {
-		t.Errorf("ServerEndpoint mismatch: got %s, want %s", 
+		t.Errorf("ServerEndpoint mismatch: got %s, want %s",
 			loadedConfig.ServerEndpoint, testConfig.ServerEndpoint)
 	}
 
 	if loadedConfig.ClientIP != testConfig.ClientIP {
-		t.Errorf("ClientIP mismatch: got %s, want %s", 
+		t.Errorf("ClientIP mismatch: got %s, want %s",
 			loadedConfig.ClientIP, testConfig.ClientIP)
 	}
 
