@@ -190,21 +190,6 @@ func base64ToHex(b64Key string) (string, error) {
 	return hex.EncodeToString(keyBytes), nil
 }
 
-// configureInterfaceIP is deprecated - IP configuration is handled by wireguard-go userspace implementation
-// The userspace implementation manages its own virtual network stack
-func (tm *TunnelManager) configureInterfaceIP() error {
-	// This method is no longer used - wireguard-go userspace handles IP configuration internally
-	fmt.Println("IP configuration handled by userspace WireGuard implementation")
-	return nil
-}
-
-// configureRoutes is deprecated - routing is handled by wireguard-go userspace implementation
-// The userspace implementation manages its own routing through the virtual TUN interface
-func (tm *TunnelManager) configureRoutes() error {
-	// This method is no longer used - wireguard-go userspace handles routing internally
-	fmt.Println("Routing configuration handled by userspace WireGuard implementation")
-	return nil
-}
 
 // generateWireGuardConfig creates the WireGuard configuration
 func (tm *TunnelManager) generateWireGuardConfig() (string, error) {
@@ -430,20 +415,62 @@ func (tm *TunnelManager) configureFullTrafficRouting() error {
 		return fmt.Errorf("failed to get TUN interface index: %w", err)
 	}
 
-	// Add route for VPN subnet through the specific TUN interface
-	// Use interface index to ensure traffic goes through the WireGuard tunnel
-	routeCmd := exec.Command("route", "add", "10.0.0.0", "mask", "255.255.255.0", "0.0.0.0", "if", strconv.Itoa(tunInterfaceIndex), "metric", "1")
-	if err := routeCmd.Run(); err != nil {
-		fmt.Printf("⚠️  Failed to add VPN subnet route: %v\n", err)
-		fmt.Println("   You may need to run as administrator")
-	} else {
-		fmt.Printf("✅ VPN subnet routing configured (10.0.0.0/24) through interface %d\n", tunInterfaceIndex)
+	// Step 1: Get current default gateway before we change it
+	fmt.Println("   Getting current default gateway...")
+	defaultGatewayCmd := exec.Command("route", "print", "0.0.0.0")
+	defaultOutput, err := defaultGatewayCmd.CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("failed to get current default gateway: %w", err)
+	}
+	
+	// Extract current default gateway for host route
+	currentGateway, currentInterface := tm.extractDefaultGateway(string(defaultOutput))
+	if currentGateway == "" {
+		return fmt.Errorf("could not determine current default gateway")
+	}
+	fmt.Printf("   Current default gateway: %s via interface %s\n", currentGateway, currentInterface)
+	
+	// Step 2: Add host route for VPN server to prevent routing loop
+	serverIP := strings.Split(tm.config.ServerEndpoint, ":")[0]
+	if serverIP != "127.0.0.1" && serverIP != "localhost" {
+		fmt.Printf("   Adding host route for VPN server %s...\n", serverIP)
+		hostRouteCmd := exec.Command("route", "add", serverIP, "mask", "255.255.255.255", currentGateway)
+		if err := hostRouteCmd.Run(); err != nil {
+			fmt.Printf("⚠️  Warning: Failed to add host route for VPN server: %v\n", err)
+		}
+	}
+	
+	// Step 3: Route all traffic through VPN tunnel
+	fmt.Printf("   Routing ALL traffic through WireGuard interface %d...\n", tunInterfaceIndex)
+	
+	// Add 0.0.0.0/1 and 128.0.0.0/1 routes (this covers all traffic)
+	// This is the standard VPN approach to override the default route
+	routes := []struct{ network, mask string }{
+		{"0.0.0.0", "128.0.0.0"},     // 0.0.0.0/1
+		{"128.0.0.0", "128.0.0.0"},   // 128.0.0.0/1
+	}
+	
+	for _, route := range routes {
+		routeCmd := exec.Command("route", "add", route.network, "mask", route.mask, "0.0.0.0", "if", strconv.Itoa(tunInterfaceIndex), "metric", "1")
+		routeOutput, err := routeCmd.CombinedOutput()
+		if err != nil {
+			fmt.Printf("⚠️  Failed to add route %s/%s: %v\n", route.network, route.mask, err)
+			fmt.Printf("   Route command output: %s\n", string(routeOutput))
+		} else {
+			fmt.Printf("✅ Route %s/%s configured through interface %d\n", route.network, route.mask, tunInterfaceIndex)
+		}
+	}
+	
+	// Step 4: Add VPN subnet route for server communication
+	vpcRouteCmd := exec.Command("route", "add", "10.0.0.0", "mask", "255.255.255.0", "0.0.0.0", "if", strconv.Itoa(tunInterfaceIndex), "metric", "1")
+	if err := vpcRouteCmd.Run(); err != nil {
+		fmt.Printf("⚠️  Warning: Failed to add VPN subnet route: %v\n", err)
 	}
 
 	fmt.Println()
-	fmt.Println("💡 Full internet routing is disabled for safety.")
-	fmt.Println("   Only VPN subnet (10.0.0.0/24) is routed through the tunnel.")
-	fmt.Println("   Use 'ping 10.0.0.1' to test VPN connectivity.")
+	fmt.Println("🌐 ALL TRAFFIC now routes through VPN!")
+	fmt.Println("   Your real IP is hidden and all internet traffic is encrypted.")
+	fmt.Println("   Use 'ping google.com' or 'curl https://ipinfo.io/ip' to test.")
 
 	return nil
 }
@@ -452,13 +479,32 @@ func (tm *TunnelManager) configureFullTrafficRouting() error {
 func (tm *TunnelManager) cleanupRouting() {
 	fmt.Println("🧹 Cleaning up VPN routes...")
 
-	// Remove the VPN subnet route we added
-	routeCmd := exec.Command("route", "delete", "10.0.0.0", "mask", "255.255.255.0")
-	if err := routeCmd.Run(); err != nil {
-		// Route might not exist, that's okay
-		fmt.Printf("   Route cleanup: %v (may be expected)\n", err)
-	} else {
-		fmt.Println("✅ VPN subnet routes removed")
+	// Remove the routes we added for full traffic routing
+	routes := []struct{ network, mask string }{
+		{"0.0.0.0", "128.0.0.0"},     // 0.0.0.0/1
+		{"128.0.0.0", "128.0.0.0"},   // 128.0.0.0/1
+		{"10.0.0.0", "255.255.255.0"}, // VPN subnet
+	}
+	
+	for _, route := range routes {
+		routeCmd := exec.Command("route", "delete", route.network, "mask", route.mask)
+		if err := routeCmd.Run(); err != nil {
+			// Route might not exist, that's okay
+			fmt.Printf("   Route cleanup %s/%s: %v (may be expected)\n", route.network, route.mask, err)
+		} else {
+			fmt.Printf("✅ Route %s/%s removed\n", route.network, route.mask)
+		}
+	}
+	
+	// Remove host route for VPN server
+	serverIP := strings.Split(tm.config.ServerEndpoint, ":")[0]
+	if serverIP != "127.0.0.1" && serverIP != "localhost" {
+		hostRouteCmd := exec.Command("route", "delete", serverIP, "mask", "255.255.255.255")
+		if err := hostRouteCmd.Run(); err != nil {
+			fmt.Printf("   Host route cleanup %s: %v (may be expected)\n", serverIP, err)
+		} else {
+			fmt.Printf("✅ Host route for %s removed\n", serverIP)
+		}
 	}
 }
 
@@ -589,6 +635,27 @@ func (tm *TunnelManager) getTunInterfaceIndex() (int, error) {
 	}
 
 	return 0, fmt.Errorf("no WireGuard/TUN interface found - please ensure the WireGuard device is running")
+}
+
+// extractDefaultGateway extracts the current default gateway from route output
+func (tm *TunnelManager) extractDefaultGateway(routeOutput string) (gateway, interfaceName string) {
+	lines := strings.Split(routeOutput, "\n")
+	for _, line := range lines {
+		// Parse the route line: Network Destination  Netmask  Gateway  Interface  Metric
+		fields := strings.Fields(line)
+		if len(fields) >= 4 {
+			// Look for the default route (0.0.0.0 network with 0.0.0.0 netmask)
+			if fields[0] == "0.0.0.0" && fields[1] == "0.0.0.0" {
+				gateway = strings.TrimSpace(fields[2])
+				interfaceName = strings.TrimSpace(fields[3])
+				// Skip if gateway is 0.0.0.0 or On-link (we want the actual gateway)
+				if gateway != "0.0.0.0" && gateway != "On-link" && gateway != "" {
+					return gateway, interfaceName
+				}
+			}
+		}
+	}
+	return "", ""
 }
 
 // configureUnixVPNRouting configures Unix routing for VPN traffic
