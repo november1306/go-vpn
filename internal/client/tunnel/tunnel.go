@@ -415,15 +415,23 @@ func (tm *TunnelManager) configureFullTrafficRouting() error {
 
 	fmt.Printf("Current routing table:\n%s\n", string(output))
 
-	// For now, show what would be configured rather than actually changing routes
-	// This prevents breaking the user's internet connection during testing
-	fmt.Println("⚠️  Full routing configuration would:")
-	fmt.Println("   1. Add route for VPN server via current gateway")
-	fmt.Println("   2. Replace default route (0.0.0.0/0) to go through VPN")
-	fmt.Println("   3. Configure DNS to use VPN-provided DNS servers")
+	// Add basic VPN subnet routing to allow communication with VPN server
+	fmt.Println("⚠️  Configuring basic VPN subnet routing (10.0.0.0/24)...")
+
+	// Add route for VPN subnet through the TUN interface
+	// This allows pinging 10.0.0.1 (server) through the VPN tunnel
+	routeCmd := exec.Command("route", "add", "10.0.0.0", "mask", "255.255.255.0", "10.0.0.100", "metric", "1")
+	if err := routeCmd.Run(); err != nil {
+		fmt.Printf("⚠️  Failed to add VPN subnet route: %v\n", err)
+		fmt.Println("   You may need to run as administrator")
+	} else {
+		fmt.Println("✅ VPN subnet routing configured (10.0.0.0/24)")
+	}
+
 	fmt.Println()
-	fmt.Println("💡 This is disabled for safety during local testing.")
-	fmt.Println("   Deploy to production environment to enable full VPN routing.")
+	fmt.Println("💡 Full internet routing is disabled for safety.")
+	fmt.Println("   Only VPN subnet (10.0.0.0/24) is routed through the tunnel.")
+	fmt.Println("   Use 'ping 10.0.0.1' to test VPN connectivity.")
 
 	return nil
 }

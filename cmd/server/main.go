@@ -113,7 +113,7 @@ func handleRegister(w http.ResponseWriter, r *http.Request) {
 		// Use the host the client connected to with the VPN port
 		endpoint = fmt.Sprintf("%s:%d", host, cfg.Server.VPNPort)
 	}
-	
+
 	// Return connection details
 	response := RegisterResponse{
 		ServerPublicKey: serverInfo.PublicKey,
