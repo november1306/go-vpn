@@ -1,6 +1,6 @@
 # Makefile for go-vpn project
 
-.PHONY: build build-server build-cli run-server run-cli test test-unit test-integration test-docker test-all lint fmt clean clean-all deps download-wintun help
+.PHONY: build build-server build-cli run-server run-cli test test-unit test-integration test-docker test-all lint fmt clean clean-all deps download-wintun setup-server-env verify-server-env help
 
 # Default target
 build: build-server build-cli
@@ -111,6 +111,15 @@ ifeq ($(OS),Windows_NT)
 	@echo "WinTUN DLL copied to bin/wintun.dll"
 endif
 
+# Server environment setup (Linux only)
+setup-server-env:
+	@chmod +x scripts/setup-server.sh
+	@sudo ./scripts/setup-server.sh
+
+verify-server-env:
+	@chmod +x scripts/verify-server.sh
+	@sudo ./scripts/verify-server.sh
+
 help:
 	@echo "Available targets:"
 	@echo "  build             - Build server and CLI"
@@ -121,6 +130,10 @@ help:
 	@echo "Run commands:"
 	@echo "  run-server        - Build and run VPN server"
 	@echo "  run-cli           - Build and run VPN CLI client"
+	@echo ""
+	@echo "Server environment (Linux only):"
+	@echo "  setup-server-env  - Set up clean Ubuntu server environment"
+	@echo "  verify-server-env - Verify server environment configuration"
 	@echo ""
 	@echo "Test stages (aligned with CI):"
 	@echo "  test              - Run unit tests (default)"
