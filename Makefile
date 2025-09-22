@@ -113,12 +113,16 @@ endif
 
 # Server environment setup (Linux only)
 setup-server-env:
+	@echo "Setting up server environment..."
 	@chmod +x scripts/setup-server.sh
 	@sudo ./scripts/setup-server.sh
 
 verify-server-env:
+	@echo "Verifying server environment..."
 	@chmod +x scripts/verify-server.sh
 	@sudo ./scripts/verify-server.sh
+
+
 
 help:
 	@echo "Available targets:"

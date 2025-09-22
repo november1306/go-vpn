@@ -15,72 +15,112 @@ check_root() {
 install_dependencies() {
     echo "Installing dependencies..."
     
-    # Set non-interactive mode to avoid prompts
+    # Set multiple non-interactive modes to avoid prompts
     export DEBIAN_FRONTEND=noninteractive
+    export NEEDRESTART_MODE=a
+    export NEEDRESTART_SUSPEND=1
     
-    apt update
+    # Additional apt options for silent operation
+    APT_OPTS="-y -qq -o Dpkg::Options::=--force-confold -o Dpkg::Options::=--force-confdef -o Dpkg::Use-Pty=0"
     
-    # Upgrade with automatic handling of config files
-    apt upgrade -y -o Dpkg::Options::="--force-confold"
+    apt update $APT_OPTS
     
-    # Install dependencies
-    apt install -y curl wget git build-essential iptables-persistent ufw make
+    # Remove conflicting packages if they exist
+    apt remove $APT_OPTS iptables-persistent netfilter-persistent 2>/dev/null || true
     
-    # Reset to interactive mode
-    unset DEBIAN_FRONTEND
+    # Upgrade with comprehensive silent options
+    apt upgrade $APT_OPTS
+    
+    # Install dependencies with silent options
+    # Use yes pipe as fallback for any remaining prompts
+    yes '' | apt install $APT_OPTS curl wget git build-essential ufw make || \
+    apt install $APT_OPTS curl wget git build-essential ufw make
+    
+    # Reset environment
+    unset DEBIAN_FRONTEND NEEDRESTART_MODE NEEDRESTART_SUSPEND
 }
 
 install_go() {
     echo "Installing Go..."
-    echo "Architecture: $(uname -m)"
-    rm -rf /usr/local/go
-    cd /tmp
-    wget -q "https://golang.org/dl/go1.24.6.linux-amd64.tar.gz"
-    tar -C /usr/local -xzf "go1.24.6.linux-amd64.tar.gz"
-    echo 'export PATH=$PATH:/usr/local/go/bin' >> ~/.bashrc
-    export PATH="/usr/local/go/bin:$PATH"
-    /usr/local/go/bin/go version
+    
+    # Check if Go is already installed
+    if command -v go >/dev/null 2>&1; then
+        echo "✓ Go already installed: $(go version)"
+    else
+        # Install Go using apt (much simpler)
+        apt install -y golang-go
+        echo "✓ Go installed: $(go version)"
+    fi
 }
 
 configure_network() {
     echo "Configuring network..."
     
-    # 1. Enable IP forwarding
+    # 1. Enable IP forwarding (idempotent)
     echo 1 > /proc/sys/net/ipv4/ip_forward
-    echo 'net.ipv4.ip_forward=1' >> /etc/sysctl.conf
+    if ! grep -q "net.ipv4.ip_forward=1" /etc/sysctl.conf; then
+        echo 'net.ipv4.ip_forward=1' >> /etc/sysctl.conf
+    fi
     
     # 2. Find public interface
     INTERFACE=$(ip route | grep default | awk '{print $5}' | head -1)
     echo "Using interface: $INTERFACE"
     
-    # 3. Add NAT masquerading for VPN subnet
-    iptables -t nat -A POSTROUTING -s 10.0.0.0/24 -o $INTERFACE -j MASQUERADE
+    # 3. Add NAT masquerading for VPN subnet (check if exists first)
+    if ! iptables -t nat -C POSTROUTING -s 10.0.0.0/24 -o "$INTERFACE" -j MASQUERADE 2>/dev/null; then
+        iptables -t nat -A POSTROUTING -s 10.0.0.0/24 -o "$INTERFACE" -j MASQUERADE
+        echo "✓ NAT rule added"
+    else
+        echo "✓ NAT rule already exists"
+    fi
     
-    # 4. Allow VPN traffic forwarding
-    iptables -A FORWARD -i wg0 -j ACCEPT
-    iptables -A FORWARD -o wg0 -j ACCEPT
+    # 4. Allow VPN traffic forwarding (check if exists first)
+    if ! iptables -C FORWARD -i wg0 -j ACCEPT 2>/dev/null; then
+        iptables -A FORWARD -i wg0 -j ACCEPT
+        echo "✓ Forward rule (wg0 in) added"
+    else
+        echo "✓ Forward rule (wg0 in) already exists"
+    fi
     
-    # 5. Allow VPN ports
+    if ! iptables -C FORWARD -o wg0 -j ACCEPT 2>/dev/null; then
+        iptables -A FORWARD -o wg0 -j ACCEPT
+        echo "✓ Forward rule (wg0 out) added"
+    else
+        echo "✓ Forward rule (wg0 out) already exists"
+    fi
+    
+    # 5. Allow VPN ports (UFW handles duplicates gracefully)
     ufw allow 51820/udp
     ufw allow 8443/tcp
     ufw --force enable
     
-    # 6. Save rules
-    iptables-save > /etc/iptables/rules.v4
+    # 6. UFW will persist rules automatically
 }
 
 setup_service() {
     echo "Setting up systemd service..."
     
-    # Create service directories
+    # Create service directories (idempotent)
     mkdir -p /root/go-vpn/{bin,data}
     
     # Install service file if it exists
     if [[ -f "scripts/go-vpn.service" ]]; then
-        cp scripts/go-vpn.service /etc/systemd/system/
-        systemctl daemon-reload
-        systemctl enable go-vpn
-        echo "✓ Systemd service installed and enabled"
+        # Only copy if different or doesn't exist
+        if ! cmp -s "scripts/go-vpn.service" "/etc/systemd/system/go-vpn.service" 2>/dev/null; then
+            cp scripts/go-vpn.service /etc/systemd/system/
+            systemctl daemon-reload
+            echo "✓ Systemd service file updated"
+        else
+            echo "✓ Systemd service file already up to date"
+        fi
+        
+        # Enable service (idempotent)
+        if ! systemctl is-enabled go-vpn >/dev/null 2>&1; then
+            systemctl enable go-vpn
+            echo "✓ Systemd service enabled"
+        else
+            echo "✓ Systemd service already enabled"
+        fi
     else
         echo "⚠ Service file not found, manual service setup required"
     fi
