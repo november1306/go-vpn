@@ -14,8 +14,20 @@ check_root() {
 
 install_dependencies() {
     echo "Installing dependencies..."
-    apt update && apt upgrade -y
-    apt install -y curl wget git build-essential iptables-persistent ufw
+    
+    # Set non-interactive mode to avoid prompts
+    export DEBIAN_FRONTEND=noninteractive
+    
+    apt update
+    
+    # Upgrade with automatic handling of config files
+    apt upgrade -y -o Dpkg::Options::="--force-confold"
+    
+    # Install dependencies
+    apt install -y curl wget git build-essential iptables-persistent ufw make
+    
+    # Reset to interactive mode
+    unset DEBIAN_FRONTEND
 }
 
 install_go() {
