@@ -2,13 +2,13 @@
 
 # Go-VPN Server Environment Verification Script
 
-set -euo pipefail
+set -uo pipefail
 
 PASS=0
 FAIL=0
 
 pass() { echo "✓ $1"; ((PASS++)); }
-fail() { echo "✗ $1"; ((FAIL++)); }
+fail() { echo "✗ $1"; ((FAIL++)); return 0; }
 
 # Function to safely check commands with timeout
 safe_check() {
