@@ -1,74 +1,100 @@
 # Product Requirements Document: GoWire VPN MVP
 
-**Primary Target**: Hetzner Cloud Linux server with cross-platform clients  
-**Timeline**: MVP focused on Hetzner deployment, other cloud providers deferred post-MVP
+**Primary Target**: Cloud-agnostic Linux server deployment with cross-platform clients  
+**Current Deployment**: DigitalOcean production server (134.122.48.36)  
+**Timeline**: MVP focused on DigitalOcean deployment, Docker containerization for multi-cloud support
 
 ## MVP Scope
 
 **Core Features**:
-- **Hetzner Cloud VPN server** hosting WireGuard with automated setup
-- Cross-platform CLI client (`register`, `connect`, `disconnect`, `status`)
-- API key authentication with secure storage
+- **Cloud-agnostic VPN server** hosting WireGuard with native Linux deployment
+- Cross-platform CLI client (`register`, `connect`, `disconnect`, `status`, `test-vpn`)
+- WireGuard key exchange and peer management (✅ **IMPLEMENTED**)
 - File-based persistence (JSON) with atomic writes and concurrency safety
-- Hetzner-optimized networking and firewall configuration
+- DigitalOcean production deployment (✅ **IMPLEMENTED**)
+- Docker containerization for future cloud deployments (✅ **IMPLEMENTED**)
 - Basic logging and error handling
 
 **Explicit Non-Goals**:
-- Multi-cloud/multi-server deployment (AWS, GCP, Azure - postponed)
-- Database integration (postponed)
-- GUI interface
+- Database integration (using JSON file storage)
+- GUI interface (CLI-focused)
 - Advanced monitoring/metrics beyond basic connectivity
 - Payment/billing systems
-- Manual server setup (focus on Hetzner automation)
+- Multi-server mesh networking
+- Enterprise authentication (LDAP/SAML)
 
 ## Architecture Overview
 
 **Components**:
-- `cmd/server`: VPN server with HTTPS API + WireGuard interface (runs on Hetzner Cloud)
-- `cmd/vpn-cli`: Cross-platform CLI client (Windows/Linux/macOS)
-- `internal/`: shared packages (auth, storage, config, logging, hetzner-integration)
+- `cmd/server`: VPN server with HTTP API + WireGuard interface (runs on DigitalOcean)
+- `cmd/vpn-cli`: Cross-platform CLI client (Windows/Linux/macOS) (✅ **IMPLEMENTED**)
+- `internal/`: shared packages (config, wireguard, client, server, ipam, version)
 
 **Communication**:
-- Control plane: HTTPS REST API (port 8443)
-- Data plane: WireGuard UDP (port 51820)
-- Storage: JSON files with file locking
+- Control plane: HTTP REST API (port 8443) (✅ **IMPLEMENTED**)
+- Data plane: WireGuard UDP (port 51820) (✅ **IMPLEMENTED**)
+- Storage: JSON files with atomic writes (✅ **IMPLEMENTED**)
 
-**Hetzner Integration**:
-- Automated server provisioning via Hetzner Cloud API
-- Optimized for Hetzner's network topology and firewall rules
-- Cost-effective scaling on Hetzner's €3.79/month CX22 servers
+**Deployment Platforms**:
+- **DigitalOcean**: Production VM deployment with setup guide (✅ **LIVE SERVER**)
+- **Docker**: Containerized deployment for any cloud provider (✅ **IMPLEMENTED**)
+- **Manual Linux**: Direct deployment on any Linux VPS (✅ **IMPLEMENTED**)
 
 ## Technical Decisions
 
-**Hosting**: Hetzner Cloud Linux servers (primary), extensible to other providers  
+**Hosting**: Cloud-agnostic (DigitalOcean production, Docker-compatible platforms)  
 **Platform**: Cross-platform clients with Go, Linux server deployment  
-**WireGuard**: `wireguard-go` userspace implementation (scales to kernel when needed)  
-**Network**: IPv4 primary, IPv6 ready (Hetzner provides free IPv6)  
-**Subnets**: `10.0.0.0/24` default, configurable for larger deployments  
-**Authentication**: 32-byte random API keys, bcrypt hashed  
-**TLS**: Required for API (Let's Encrypt for production, self-signed for dev)  
-**Firewall**: Hetzner Cloud Firewall integration for automatic security rules
+**WireGuard**: `wireguard-go` userspace implementation (✅ **IMPLEMENTED**)  
+**Network**: IPv4 primary, IPv6 ready  
+**Subnets**: `10.0.0.0/24` default with IPAM (✅ **IMPLEMENTED**)  
+**Authentication**: WireGuard public key exchange (✅ **IMPLEMENTED**), API keys (planned)  
+**TLS**: HTTP for development, HTTPS for production (manual TLS setup)  
+**Firewall**: Manual configuration per cloud provider
 
 ## User Workflow
 
-1. **Server Setup**: Deploy to Hetzner Cloud via automated script or manual installation
-2. **Register**: User runs `vpn-cli register user@example.com --server hetzner-vpn.example.com`
-3. **Connect**: User runs `vpn-cli connect` (handles routing automatically)
-4. **Disconnect**: User runs `vpn-cli disconnect`
-5. **Status**: User runs `vpn-cli status` (shows connection state, server location)
+1. **Server Setup**: Deploy to DigitalOcean VM using comprehensive setup guide
+2. **Register**: User runs `vpn-cli register --server http://134.122.48.36:8443` (✅ **WORKING**)
+3. **Connect**: User runs `vpn-cli connect` (✅ **IMPLEMENTED** - handles routing automatically)
+4. **Disconnect**: User runs `vpn-cli disconnect` (✅ **IMPLEMENTED**)
+5. **Status**: User runs `vpn-cli status` (✅ **IMPLEMENTED** - shows connection state, server info)
+6. **Test**: User runs `vpn-cli test-vpn` (✅ **IMPLEMENTED** - verifies tunnel functionality)
 
-**Hetzner-Specific Benefits**:
-- Fast deployment (< 2 minutes from API call to running VPN)
-- Global locations (Germany, Finland, USA, Singapore)
-- Consistent 1Gbps performance even on basic servers
+**Current Deployment Benefits**:
+- **DigitalOcean**: Cost-effective ($6/month droplet), full root access, proven VPN tunnel
+- **Docker**: Portable deployment across any cloud provider
+- **Manual Setup**: Complete control over server configuration and networking
+
+## Current Implementation Status
+
+### ✅ Completed Features
+- **WireGuard Key Exchange**: Full public key registration and exchange
+- **Cross-Platform CLI**: Windows, Linux, macOS client with all commands
+- **DigitalOcean Production**: Live server at 134.122.48.36 with working VPN tunnel
+- **Complete Setup Guide**: Comprehensive DigitalOcean deployment documentation
+- **Docker Support**: Containerized deployment for any cloud provider
+- **IP Allocation**: IPAM system for automatic client IP assignment
+- **Tunnel Management**: Connect, disconnect, status, and test commands
+- **Userspace WireGuard**: Full tunnel establishment with routing
+- **Persistent Server Keys**: Server maintains same keys across restarts, clients register once
+
+### ⏳ In Progress
+- **API Key Authentication**: Currently using WireGuard public keys only
+- **Production TLS**: Using HTTP, HTTPS setup planned for production
+
+### 📋 Roadmap
+- Enhanced authentication system
+- Server key persistence
+- Multi-server support
+- Advanced monitoring and metrics
 
 ## Success Criteria
 
-- Cross-platform users can register and establish VPN connection to Hetzner servers
-- All internet traffic routes through VPN when connected
-- Secure API key authentication prevents unauthorized access
-- Server handles multiple concurrent users (target: 100+ on basic Hetzner instance)
-- Clean connection/disconnection without network disruption
-- Basic operational visibility through logs
-- **Hetzner-specific**: Sub-€5/month operating cost for small user base
-- **Future-ready**: Architecture supports migration to other cloud providers
+- ✅ Cross-platform users can register and establish VPN connection (DigitalOcean production working)
+- ✅ All internet traffic routes through VPN when connected (verified on DigitalOcean)
+- ⏳ Secure API key authentication prevents unauthorized access (WireGuard keys implemented, API keys planned)
+- ✅ Server handles multiple concurrent users (tested with userspace WireGuard)
+- ✅ Clean connection/disconnection without network disruption (Windows/Linux support)
+- ✅ Basic operational visibility through logs and status commands
+- **Cost-effective**: DigitalOcean $6/month for production with full control
+- **Cloud-agnostic**: Architecture proven on DigitalOcean, Docker-ready for other providers

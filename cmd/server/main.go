@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/november1306/go-vpn/internal/config"
+	"github.com/november1306/go-vpn/internal/server/keystore"
 	"github.com/november1306/go-vpn/internal/server/vpnserver"
 	"github.com/november1306/go-vpn/internal/version"
 	"github.com/november1306/go-vpn/internal/wireguard/keys"
@@ -163,16 +164,21 @@ func main() {
 	}
 	fmt.Printf("Configuration loaded - API port: %d, VPN port: %d\n", cfg.Server.APIPort, cfg.Server.VPNPort)
 
-	// Generate server key pair
-	serverPrivateKey, serverPublicKey, err := keys.GenerateKeyPair()
+	// Initialize data directory for persistent storage
+	dataDir := "data"
+
+	// Initialize server key store (loads existing keys or generates new ones)
+	keyStore, err := keystore.NewServerKeyStore(dataDir)
 	if err != nil {
-		log.Fatalf("Failed to generate server keys: %v", err)
+		log.Fatalf("Failed to initialize server keys: %v", err)
 	}
+
+	serverPrivateKey := keyStore.GetPrivateKey()
+	serverPublicKey := keyStore.GetPublicKey()
 
 	fmt.Printf("Server public key: %s\n", serverPublicKey)
 
 	// Initialize VPN server with persistent storage
-	dataDir := "data" // Create data directory for peer persistence
 	vpnServer, err = vpnserver.NewUserspaceVPNServer(dataDir)
 	if err != nil {
 		log.Fatalf("Failed to create VPN server: %v", err)
