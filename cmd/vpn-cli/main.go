@@ -317,11 +317,6 @@ func runTestVPN() error {
 	fmt.Printf("   Via: %v\n", testResp["via"])
 	fmt.Println()
 
-	// Additional diagnostics
-	fmt.Println("📊 VPN Tunnel Diagnostics:")
-	fmt.Printf("   Local VPN IP: %s\n", clientConfig.ClientIP)
-	fmt.Printf("   Server endpoint: %s\n", clientConfig.ServerEndpoint)
-	fmt.Printf("   Connection method: Userspace WireGuard\n")
 
 	return nil
 }
