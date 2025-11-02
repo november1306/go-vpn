@@ -28,6 +28,10 @@ type ServerConfig struct {
 
 	// Server IP within the VPN network (e.g., "10.0.0.1/24")
 	ServerIP string
+
+	// Public endpoint that clients should connect to (e.g., "134.122.48.36:51820")
+	// If empty, defaults to ":port" for localhost testing
+	PublicEndpoint string
 }
 
 // WireGuardBackend defines the interface for different WireGuard implementations

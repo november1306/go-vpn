@@ -17,9 +17,10 @@ type Config struct {
 
 // ServerConfig contains HTTP server settings
 type ServerConfig struct {
-	APIPort       int    `json:"apiPort"`       // HTTP API port (default: 8443)
-	VPNPort       int    `json:"vpnPort"`       // WireGuard UDP port (default: 51820)
-	InterfaceName string `json:"interfaceName"` // WireGuard interface name (default: "wg0")
+	APIPort        int    `json:"apiPort"`        // HTTP API port (default: 8443)
+	VPNPort        int    `json:"vpnPort"`        // WireGuard UDP port (default: 51820)
+	InterfaceName  string `json:"interfaceName"`  // WireGuard interface name (default: "wg0")
+	PublicEndpoint string `json:"publicEndpoint"` // Public endpoint for clients (e.g., "1.2.3.4:51820")
 }
 
 // NetworkConfig contains VPN network settings
@@ -50,9 +51,10 @@ type TestConfig struct {
 func Load() *Config {
 	return &Config{
 		Server: ServerConfig{
-			APIPort:       getEnvInt("PORT", getEnvInt("VPN_API_PORT", 8443)),
-			VPNPort:       getEnvInt("VPN_LISTEN_PORT", 51820),
-			InterfaceName: getEnvString("VPN_INTERFACE", "wg0"),
+			APIPort:        getEnvInt("PORT", getEnvInt("VPN_API_PORT", 8443)),
+			VPNPort:        getEnvInt("VPN_LISTEN_PORT", 51820),
+			InterfaceName:  getEnvString("VPN_INTERFACE", "wg0"),
+			PublicEndpoint: getEnvString("VPN_PUBLIC_ENDPOINT", ""),
 		},
 		Network: NetworkConfig{
 			ServerIP:     getEnvString("VPN_SERVER_IP", "10.0.0.1/24"),
